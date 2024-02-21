@@ -1,21 +1,24 @@
 from netCDF4 import Dataset
 import numpy as np
-from lib.cloudfield import CloudField 
+from lib.cloudfield import CloudField
 
-def load_cloud_field_from_file(l_file_path, w_file_path, timestep, config):
-    # Load 'l' variable data
-    with Dataset(l_file_path, 'r') as nc:
-        l_data = nc.variables['l'][timestep, :, :, :]  # Assuming 'l' is the variable name
-        l_data = np.array(l_data)  # Ensure it's a numpy array
 
-    # Optionally load 'w' variable data
-    w_data = None
-    if config['consider_w']:
-        with Dataset(w_file_path, 'r') as nc:
-            w_data = nc.variables['w'][timestep, :, :, :]  # Assuming 'w' is the variable name
-            w_data = np.array(w_data)  # Ensure it's a numpy array
+def load_cloud_field_from_file(l_file_path, timestep, config):
+    """
+    Load cloud data from files for a specific timestep and create a CloudField object.
 
-    # Now, l_data and w_data are numpy arrays and can be passed to CloudField
-    cloud_field = CloudField(timestep, l_data, w_data, config)
-    return cloud_field
+    Parameters:
+    - l_file_path: Path to the file containing 'l' data (liquid water content).
+    - w_file_path: Path to the file containing 'w' data (vertical velocity).
+    - timestep: The timestep to load.
+
+    Returns:
+    - A CloudField object for the given timestep.
+    """
+    # Load 'l' data
+    l_dataset = Dataset(l_file_path, 'r')
+    l_data = l_dataset.variables['l'][timestep, :, :, :]
+
+    # Correctly create and return the CloudField object
+    return CloudField(l_data, timestep, config)
 

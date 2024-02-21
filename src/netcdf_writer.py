@@ -1,36 +1,33 @@
-import numpy as np
 from netCDF4 import Dataset
+import numpy as np
 
-def write_cloud_data_to_netcdf(cloud_tracks, filename):
-    with Dataset(filename, 'w', format='NETCDF4') as dataset:
-        # Create dimensions
-        max_timesteps = max(len(track) for track in cloud_tracks.values())
-        max_clouds = len(cloud_tracks)
-        max_points = max(len(cloud.points) for track in cloud_tracks.values() for cloud in track)
+def write_cloud_tracks_to_netcdf(tracks, file_path):
+    """
+    Write cloud track information to a netCDF file.
 
-        dataset.createDimension('timestep', max_timesteps)
-        dataset.createDimension('cloud', max_clouds)
-        dataset.createDimension('point', max_points)
+    Parameters:
+    - tracks: Dictionary containing cloud track information.
+    - file_path: Path to the netCDF file to be created.
+    """
+    with Dataset(file_path, 'w', format='NETCDF4') as nc:
+        # Dimensions
+        max_length = max(len(track) for track in tracks.values())
+        nc.createDimension('track', None)  # Unlimited dimension
+        nc.createDimension('time', max_length)
 
-        # Create variables
-        sizes = dataset.createVariable('size', np.float32, ('cloud', 'timestep'))
-        x_centers = dataset.createVariable('x_center', np.float32, ('cloud', 'timestep'))
-        y_centers = dataset.createVariable('y_center', np.float32, ('cloud', 'timestep'))
-        z_centers = dataset.createVariable('z_center', np.float32, ('cloud', 'timestep'))
-        x_coords = dataset.createVariable('x', np.float32, ('cloud', 'timestep', 'point'))
-        y_coords = dataset.createVariable('y', np.float32, ('cloud', 'timestep', 'point'))
-        z_coords = dataset.createVariable('z', np.float32, ('cloud', 'timestep', 'point'))
+        # Variables
+        sizes = nc.createVariable('size', 'f4', ('track', 'time'))
+        locations_x = nc.createVariable('location_x', 'f4', ('track', 'time'))
+        locations_y = nc.createVariable('location_y', 'f4', ('track', 'time'))
+        locations_z = nc.createVariable('location_z', 'f4', ('track', 'time'))
 
-        # Store data
-        for i, (cloud_id, track) in enumerate(cloud_tracks.items()):
-            for j, cloud in enumerate(track):
+        # Fill variables with data
+        track_ids = list(tracks.keys())
+        for i, track_id in enumerate(track_ids):
+            for j, cloud in enumerate(tracks[track_id]):
                 sizes[i, j] = cloud.size
-                x_centers[i, j], y_centers[i, j], z_centers[i, j] = cloud.location
-                for k, point in enumerate(cloud.points):
-                    x_coords[i, j, k], y_coords[i, j, k], z_coords[i, j, k] = point
+                locations_x[i, j], locations_y[i, j], locations_z[i, j] = cloud.location
 
-        # Handle missing data
-        x_coords[:, :, :] = np.ma.masked_where(x_coords[:, :, :] == 0, x_coords)
-        y_coords[:, :, :] = np.ma.masked_where(y_coords[:, :, :] == 0, y_coords)
-        z_coords[:, :, :] = np.ma.masked_where(z_coords[:, :, :] == 0, z_coords)
+        # Attributes
+        nc.description = "Cloud tracking information"
 
