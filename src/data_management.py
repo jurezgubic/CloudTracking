@@ -7,11 +7,6 @@ def load_cloud_field_from_file(l_file_path, timestep, config):
     """
     Load cloud data from files for a specific timestep and create a CloudField object.
 
-    Parameters:
-    - l_file_path: Path to the file containing 'l' data (liquid water content).
-    - w_file_path: Path to the file containing 'w' data (vertical velocity).
-    - timestep: The timestep to load.
-
     Returns:
     - A CloudField object for the given timestep.
     """

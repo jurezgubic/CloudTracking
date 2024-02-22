@@ -58,6 +58,7 @@ class CloudField:
         bottom_edge = set(labeled_array[-1, :].flatten())
         left_edge = set(labeled_array[:, 0].flatten())
         right_edge = set(labeled_array[:, -1].flatten())
+        print (top_edge, bottom_edge, left_edge, right_edge)
         return top_edge, bottom_edge, left_edge, right_edge
 
     def find_boundary_merges(self, edge_clouds, array_shape):
