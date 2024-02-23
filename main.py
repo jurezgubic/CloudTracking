@@ -4,13 +4,13 @@ from lib.cloudtracker import CloudTracker
 
 # Set file paths and parameters
 l_file_path = '/Users/jure/PhD/coding/RICO_1hr/rico.l.nc'
-total_timesteps = 40
+total_timesteps = 4
 
 output_netcdf_path = 'cloud_results.nc'
 
 config = {
-    'min_size': 10,  # Minimum size of cloud objects to be considered
-    'l_condition': 0.0008,  # Threshold condition for liquid water
+    'min_size': 50,  # Minimum size of cloud objects to be considered
+    'l_condition': 0.001,#0.0002  # Threshold condition for liquid water
     'timestep_duration': 60  # Duration between timesteps in seconds
 }
 
