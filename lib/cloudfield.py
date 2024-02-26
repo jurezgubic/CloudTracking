@@ -44,9 +44,11 @@ class CloudField:
         merges = []
         distance_threshold = 3
 
-        # Extract points for top and bottom boundaries only if there are labels present
+        # Extract points for boundaries only if there are labels present
         top_region_labels = edge_regions['top']
         bottom_region_labels = edge_regions['bottom']
+        left_region_labels = edge_regions['left']
+        right_region_labels = edge_regions['right']
 
         # Prepare arrays for top and bottom boundary points if labels are present, else use empty arrays
         top_points = np.vstack([np.argwhere(labeled_array[0, :] == label) \
@@ -55,7 +57,12 @@ class CloudField:
         bottom_points = np.vstack([np.argwhere(labeled_array[-1, :] == label) \
                                 for label in bottom_region_labels]) \
                                 if bottom_region_labels else np.empty((0, 2))
-
+        left_points = np.vstack([np.argwhere(labeled_array[:, 0] == label) \
+                                for label in left_region_labels]) \
+                                if left_region_labels else np.empty((0,2))
+        right_points = np.vstack([np.argwhere(labeled_array[:, -1] == label) \
+                                for label in right_region_labels]) \
+                                if right_region_labels else np.empty((0,2))
 
         # Check for empty arrays to avoid errors in the next steps
         if top_points.size > 0 and bottom_points.size > 0:
@@ -83,8 +90,9 @@ class CloudField:
                 for bottom_label in matched_bottom_labels:
                     merges.append((top_label, bottom_label))
 
-
         return merges
+
+
 
     def update_labels_for_merges(self, labeled_array, merges):
         print ("Updating labels for merges...")
