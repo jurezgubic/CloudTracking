@@ -2,19 +2,35 @@ from lib.cloud import Cloud
 from skimage import measure
 import numpy as np
 from scipy.ndimage import binary_dilation
+from utils.plotting_utils import plot_labeled_regions
 
 class CloudField:
     def __init__(self, l_data,  timestep, config):
         self.timestep = timestep
         self.distance_threshold = config['distance_threshold']
+
         # creates a labeled array of objects
         labeled_array = self.identify_regions(l_data, config)
+
+        if config['plot_switch'] == True:
+            plot_labeled_regions('labeled', labeled_array, timestep=timestep, plot_all_levels=True)
+
         # find merges between edge regions
         merges = self.find_boundary_merges(labeled_array)
         # update labels for merges
         updated_labeled_array = self.update_labels_for_merges(labeled_array, merges)
         # create cloud data from updated labeled array
         self.clouds = self.create_clouds_from_labeled_array(updated_labeled_array, l_data, config)
+
+        if config['plot_switch'] == True:
+            plot_labeled_regions('updated', updated_labeled_array, timestep=timestep, plot_all_levels=True)
+
+        # example of how to plot labeled regions
+        # plot_labeled_regions('name_or_array', labeled_array, timestep=timestep, plot_all_levels=False, specific_level=50)
+        # plot_labeled_regions('name_of_array', labeled_array, timestep=timestep, plot_all_levels=True) #plots all levels
+
+
+
 
 
     def identify_regions(self, l_data, config):
@@ -24,53 +40,6 @@ class CloudField:
         print(f"Objects labeled. Number of initial features: {num_features}")
 
         return labeled_array
-
-
-
-
-
-
-
-    def old_find_boundary_merges(self, labeled_array):
-        merges = []
-        threshold = self.distance_threshold
-
-        # Function to find boundary points for a given label
-        def boundary_points(label, boundary_array):
-            return np.argwhere(boundary_array == label)
-
-        # Function to check if there's a corresponding region across the boundary
-        def find_corresponding_region(src_points, target_labels, target_boundary, axis_index):
-            for src_point in src_points:
-                src_coord = src_point[axis_index]  # Extract the relevant coordinate for comparison
-                for target_label in target_labels:
-                    target_points = boundary_points(target_label, target_boundary)
-                    # Check if any target point matches src_coord within the threshold
-                    if any(abs(target_point[axis_index] - src_coord) <= threshold for target_point in target_points):
-                        return target_label
-            return None  # Ensure this return statement is correctly part of find_corresponding_region
-
-        # Define boundaries to process for merges
-        boundaries = {
-            'north': (labeled_array[:, 0, :], labeled_array[:, -1, :], 1),
-            'east': (labeled_array[:, :, -1], labeled_array[:, :, 0], 0),
-        }
-
-        # Process for north-south and east-west boundaries
-        for direction, (src_boundary, target_boundary, axis_index) in boundaries.items():
-            src_labels = np.unique(src_boundary)[1:]  # Excluding background
-            target_labels = np.unique(target_boundary)[1:]
-
-            for src_label in src_labels:
-                src_points = boundary_points(src_label, src_boundary)
-                corresponding_label = find_corresponding_region(src_points, target_labels, target_boundary, axis_index)
-                if corresponding_label:
-                    merges.append((src_label, corresponding_label))
-
-        return merges  # Ensure merges list is returned after processing all boundaries
-
-
-
 
 
 
@@ -94,10 +63,10 @@ class CloudField:
             return False
 
         # Preparing boundary arrays
-        north_boundary = labeled_array[:, 0, :]
-        south_boundary = labeled_array[:, -1, :]
-        east_boundary = labeled_array[:, :, 0]
-        west_boundary = labeled_array[:, :, -1]
+        north_boundary = labeled_array[:, -1, :]
+        south_boundary = labeled_array[:, 0, :]
+        east_boundary = labeled_array[:, :, -1]
+        west_boundary = labeled_array[:, :, 0]
 
         # Identifying unique labels on each boundary
         north_labels = np.unique(north_boundary)[1:]  # Excluding background
@@ -130,39 +99,8 @@ class CloudField:
                 if check_within_threshold(e_points, w_points, threshold):
                     merges.append((e_label, w_label))
 
-        #print merges
+
         print(f"Merges: {merges}")
-
-
-
-        import matplotlib.pyplot as plt
-        z_slice = 50  # Choose the z-slice to visualize
-        slice_array = labeled_array[z_slice, :, :]
-        unique_labels = np.unique(slice_array)[1:]  # Exclude background (0)
-        plt.figure(figsize=(10, 10))
-        for label in unique_labels:
-            # Find points for the current label
-            y, x = np.where(slice_array == label)
-            plt.scatter(x, y, label=f'Cloud {label}', alpha=0.6, edgecolors='w', s=10)  # s is the marker size
-
-        # Optionally, annotate a few labels
-        for label in unique_labels[:5]:  # Annotate first 5 labels as an example
-            points_y, points_x = np.where(slice_array == label)
-            if len(points_y) > 0:
-                centroid_y = np.mean(points_y)
-                centroid_x = np.mean(points_x)
-                plt.text(centroid_x, centroid_y, str(label), color='black', fontsize=12)
-
-        plt.xlabel('X axis')
-        plt.ylabel('Y axis')
-        plt.title('Labeled Regions in X-Y Plane')
-        plt.legend(markerscale=2, bbox_to_anchor=(1.05, 1), loc='upper left')  # Adjust legend outside
-        plt.tight_layout()
-
-        plt.savefig('labeled_regions_plot.png')
-
-
-
         return merges
 
 
