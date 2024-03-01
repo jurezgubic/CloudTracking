@@ -4,14 +4,18 @@ from lib.cloudtracker import CloudTracker
 
 # Set file paths and parameters
 l_file_path = '/Users/jure/PhD/coding/RICO_1hr/rico.l.nc'
-total_timesteps = 4
-
 output_netcdf_path = 'cloud_results.nc'
 
+# Set total number of timesteps
+total_timesteps = 18
+
+# Set configuration parameters
 config = {
     'min_size': 50,  # Minimum size of cloud objects to be considered
-    'l_condition': 0.001,  # Threshold condition for liquid water
-    'timestep_duration': 60  # Duration between timesteps in seconds
+    'l_condition': 0.0009,#0.0002  # Threshold condition for liquid water content
+    'timestep_duration': 60,  # Duration between timesteps in seconds
+    'distance_threshold': 3, # Max distance between merging clouds across boundaries (not between timesteps!)
+    'plot_switch': False # Plot cloud field at each timestep
 }
 
 # Initialize CloudTracker
@@ -19,6 +23,7 @@ cloud_tracker = CloudTracker()
 
 # Process each timestep
 for timestep in range(total_timesteps):
+    print ("-"*50)
     print(f"Processing timestep {timestep}")
 
     # Load cloud field for the current timestep
@@ -32,3 +37,4 @@ print("Cloud tracking complete.")
 # Write cloud track information to netCDF
 write_cloud_tracks_to_netcdf(cloud_tracker.get_tracks(), output_netcdf_path)
 print("Cloud track information written to netCDF.")
+
