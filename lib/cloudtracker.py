@@ -27,6 +27,8 @@ class CloudTracker:
             if cloud_id not in matched_clouds:
                 self.cloud_tracks[cloud_id] = [cloud]
 
+    # I wonder if it might be best to translate the cloud field here by u.v from the namelist
+
     def is_match(self, cloud, last_cloud_in_track):
         # Calculate overlap between cloud points
         current_cloud_points = set(cloud.points)

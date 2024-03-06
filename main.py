@@ -7,15 +7,17 @@ l_file_path = '/Users/jure/PhD/coding/RICO_1hr/rico.l.nc'
 output_netcdf_path = 'cloud_results.nc'
 
 # Set total number of timesteps
-total_timesteps = 18
+total_timesteps = 3
 
 # Set configuration parameters
 config = {
     'min_size': 50,  # Minimum size of cloud objects to be considered
-    'l_condition': 0.0009,#0.0002  # Threshold condition for liquid water content
+    'l_condition': 0.001,#0.0002  # Threshold condition for liquid water content
     'timestep_duration': 60,  # Duration between timesteps in seconds
     'distance_threshold': 3, # Max distance between merging clouds across boundaries (not between timesteps!)
     'plot_switch': False # Plot cloud field at each timestep
+    # expand config to include u and v "background" wind fields. 
+    # use namelist info to get the wind fields.
 }
 
 # Initialize CloudTracker
