@@ -3,7 +3,7 @@ import numpy as np
 from lib.cloudfield import CloudField
 
 
-def load_cloud_field_from_file(l_file_path, timestep, config):
+def load_cloud_field_from_file(file_path, file_name, timestep, config):
     """
     Load cloud data from files for a specific timestep and create a CloudField object.
 
@@ -11,9 +11,20 @@ def load_cloud_field_from_file(l_file_path, timestep, config):
     - A CloudField object for the given timestep.
     """
     # Load 'l' data
-    l_dataset = Dataset(l_file_path, 'r')
+    l_dataset = Dataset(f"{file_path}{file_name['l']}", 'r')
     l_data = l_dataset.variables['l'][timestep, :, :, :]
 
-    # Correctly create and return the CloudField object
+    # Load 'u' data
+    u_dataset = Dataset(f"{file_path}{file_name['u']}", 'r')
+    u_data = u_dataset.variables['u'][timestep, :, :, :]
+
+    # Load 'v' data
+    v_dataset = Dataset(f"{file_path}{file_name['v']}", 'r')
+    v_data = v_dataset.variables['v'][timestep, :, :, :]
+
+    # Load 'w' data
+    w_dataset = Dataset(f"{file_path}{file_name['w']}", 'r')
+    w_data = w_dataset.variables['w'][timestep, :, :, :]
+
     return CloudField(l_data, timestep, config)
 
