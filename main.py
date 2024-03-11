@@ -14,7 +14,6 @@ file_name = {
 
 output_netcdf_path = 'cloud_results.nc'
 
-
 # Set total number of timesteps
 total_timesteps = 3
 

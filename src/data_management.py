@@ -13,6 +13,9 @@ def load_cloud_field_from_file(file_path, file_name, timestep, config):
     # Load 'l' data
     l_dataset = Dataset(f"{file_path}{file_name['l']}", 'r')
     l_data = l_dataset.variables['l'][timestep, :, :, :]
+    xt = l_dataset.variables['xt'][:]
+    yt = l_dataset.variables['yt'][:]
+    zt = l_dataset.variables['zt'][:]
 
     # Load 'u' data
     u_dataset = Dataset(f"{file_path}{file_name['u']}", 'r')
@@ -26,5 +29,5 @@ def load_cloud_field_from_file(file_path, file_name, timestep, config):
     w_dataset = Dataset(f"{file_path}{file_name['w']}", 'r')
     w_data = w_dataset.variables['w'][timestep, :, :, :]
 
-    return CloudField(l_data, timestep, config)
+    return CloudField(l_data, timestep, config, xt, yt, zt)
 

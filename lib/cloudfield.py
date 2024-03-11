@@ -5,9 +5,12 @@ from scipy.ndimage import binary_dilation
 from utils.plotting_utils import plot_labeled_regions
 
 class CloudField:
-    def __init__(self, l_data,  timestep, config):
+    def __init__(self, l_data,  timestep, config, xt, yt, zt):
         self.timestep = timestep
         self.distance_threshold = config['distance_threshold']
+        self.xt = xt
+        self.yt = yt
+        self.zt = zt
 
         # creates a labeled array of objects
         labeled_array = self.identify_regions(l_data, config)
@@ -20,7 +23,7 @@ class CloudField:
         # update labels for merges
         updated_labeled_array = self.update_labels_for_merges(labeled_array, merges)
         # create cloud data from updated labeled array
-        self.clouds = self.create_clouds_from_labeled_array(updated_labeled_array, l_data, config)
+        self.clouds = self.create_clouds_from_labeled_array(updated_labeled_array, l_data, config, xt, yt, zt)
 
         if config['plot_switch'] == True:
             plot_labeled_regions('updated', updated_labeled_array, timestep=timestep, plot_all_levels=True)
@@ -115,7 +118,7 @@ class CloudField:
         return labeled_array
 
 
-    def create_clouds_from_labeled_array(self, updated_labeled_array, l_data, config):
+    def create_clouds_from_labeled_array(self, updated_labeled_array, l_data, config, xt, yt, zt):
         print ("Creating cloud data from labeled array...")
 
         # recalculate the clouds from the updated labeled array
@@ -128,7 +131,9 @@ class CloudField:
                 cloud_id = f"{self.timestep}-{region.label}"
                 cloud_mask = updated_labeled_array == region.label
                 points = np.argwhere(cloud_mask)
-                points = [tuple(point) for point in points]
+                #points = [tuple(point) for point in points]
+
+                points = [(xt[x], yt[y], zt[z]) for z, y, x in points]
 
                 # Estimate the surface area
                 surface_mask = binary_dilation(cloud_mask) & ~cloud_mask
@@ -143,6 +148,17 @@ class CloudField:
                     timestep=self.timestep
                 )
         print(f"Cloud data for {len(clouds)} objects.")
+
+        # print all data that the object cloud has
+        for cloud in clouds:
+            # print a short line to separate the clouds
+            print("-------------------------------------------------------")
+            print(f"cloud id is {clouds[cloud].cloud_id}")
+            print(f"size is {clouds[cloud].size}")
+            print(f"surface area is {clouds[cloud].surface_area}")
+            print(f"location is {clouds[cloud].location}")
+            print(f"timestep is {clouds[cloud].timestep}")
+            print(clouds[cloud].points)
 
         return clouds
 
