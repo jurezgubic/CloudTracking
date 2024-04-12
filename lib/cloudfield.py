@@ -1,8 +1,8 @@
-from lib.cloud import Cloud
 from skimage import measure
 import numpy as np
 from scipy.ndimage import binary_dilation
 from utils.plotting_utils import plot_labeled_regions
+from lib.cloud import Cloud
 
 class CloudField:
     def __init__(self, l_data,  timestep, config, xt, yt, zt):
@@ -23,14 +23,17 @@ class CloudField:
         # update labels for merges
         updated_labeled_array = self.update_labels_for_merges(labeled_array, merges)
         # create cloud data from updated labeled array
-        self.clouds = self.create_clouds_from_labeled_array(updated_labeled_array, l_data, config, xt, yt, zt)
+        self.clouds = self.create_clouds_from_labeled_array(
+            updated_labeled_array, l_data, config, xt, yt, zt)
 
         if config['plot_switch'] == True:
             plot_labeled_regions('updated', updated_labeled_array, timestep=timestep, plot_all_levels=True)
 
         # example of how to plot labeled regions
-        # plot_labeled_regions('name_or_array', labeled_array, timestep=timestep, plot_all_levels=False, specific_level=50)
-        # plot_labeled_regions('name_of_array', labeled_array, timestep=timestep, plot_all_levels=True) #plots all levels
+        # plot_labeled_regions(
+            #'name_or_array', labeled_array, timestep=timestep, plot_all_levels=False, specific_level=50)
+        # plot_labeled_regions(
+            #'name_of_array', labeled_array, timestep=timestep, plot_all_levels=True) #plots all levels
 
 
 
@@ -149,16 +152,19 @@ class CloudField:
                 )
         print(f"Cloud data for {len(clouds)} objects.")
 
-        # print all data that the object cloud has
-        for cloud in clouds:
-            # print a short line to separate the clouds
-            print("-------------------------------------------------------")
-            print(f"cloud id is {clouds[cloud].cloud_id}")
-            print(f"size is {clouds[cloud].size}")
-            print(f"surface area is {clouds[cloud].surface_area}")
-            print(f"location is {clouds[cloud].location}")
-            print(f"timestep is {clouds[cloud].timestep}")
-            print(clouds[cloud].points)
+        print_cloud_data_switch = False
+
+        if print_cloud_data_switch == True:
+            # print all data that the object cloud has
+            for cloud in clouds:
+                # print a short line to separate the clouds
+                print("-------------------------------------------------------")
+                print(f"cloud id is {clouds[cloud].cloud_id}")
+                print(f"size is {clouds[cloud].size}")
+                print(f"surface area is {clouds[cloud].surface_area}")
+                print(f"location is {clouds[cloud].location}")
+                print(f"timestep is {clouds[cloud].timestep}")
+                print(clouds[cloud].points)
 
         return clouds
 

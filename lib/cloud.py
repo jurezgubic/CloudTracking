@@ -8,5 +8,6 @@ class Cloud:
         self.timestep = timestep
 
     def __repr__(self):
-        return f"Cloud(ID: {self.cloud_id}, Size: {self.size}, Surface Area: {self.surface_area}, Timestep: {self.timestep})"
+        return f"Cloud(ID: {self.cloud_id}, Size: {self.size}, \
+            Surface Area: {self.surface_area}, Timestep: {self.timestep})"
 

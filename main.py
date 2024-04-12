@@ -12,21 +12,34 @@ file_name = {
     'w': 'rico.w.nc'
 }
 
+# Set output file path
 output_netcdf_path = 'cloud_results.nc'
 
-# Set total number of timesteps
+# Set number of timesteps to process
 total_timesteps = 3
 
 # Set configuration parameters
 config = {
     'min_size': 50,  # Minimum size of cloud objects to be considered
-    'l_condition': 0.001,#0.0002  # Threshold condition for liquid water content
+    'l_condition': 0.001,#0.0002  # Threshold condition for liquid water
     'timestep_duration': 60,  # Duration between timesteps in seconds
-    'distance_threshold': 3, # Max distance between merging clouds across boundaries (not between timesteps!)
+    'distance_threshold': 3, # Max dist between merging clouds across boundary
     'plot_switch': False, # Plot cloud field at each timestep
     'background_u_drift': -5, # m/s, taken from namelist
     'background_v_drift': 4 # m/s, taken from namelist
 }
+
+
+# set proper output file path (placeholder for later)
+# import os
+# import datetime
+# today = datetime.date.today()
+# output_folder = f'output/{today}'
+# if not os.path.exists(output_folder):
+#     os.makedirs(output_folder)
+# output_netcdf_path = f'{output_folder}/{total_timesteps}timesteps_{config["l_condition"]}l_condition.nc'
+# print(f"Output netcdf file path: {output_netcdf_path}")
+
 
 # Initialize CloudTracker
 cloud_tracker = CloudTracker()
@@ -34,7 +47,7 @@ cloud_tracker = CloudTracker()
 # Process each timestep
 for timestep in range(total_timesteps):
     print ("-"*50)
-    print(f"Processing timestep {timestep}")
+    print(f"Processing timestep {timestep+1} of {total_timesteps}")
 
     # Load cloud field for the current timestep
     cloud_field = load_cloud_field_from_file(base_file_path, file_name, timestep, config)
@@ -47,4 +60,3 @@ print("Cloud tracking complete.")
 # Write cloud track information to netCDF
 write_cloud_tracks_to_netcdf(cloud_tracker.get_tracks(), output_netcdf_path)
 print("Cloud track information written to netCDF.")
-
