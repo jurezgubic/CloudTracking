@@ -3,6 +3,9 @@ __pycache__/
 *.py[cod]
 *$py.class
 
+# netcdf files
+*.nc
+
 # macOS
 .DS_Store
 
