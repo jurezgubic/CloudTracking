@@ -152,7 +152,7 @@ class CloudField:
                 )
         print(f"Cloud data for {len(clouds)} objects.")
 
-        print_cloud_data_switch = False
+        print_cloud_data_switch = True
 
         if print_cloud_data_switch == True:
             # print all data that the object cloud has
