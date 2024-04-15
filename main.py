@@ -21,12 +21,12 @@ total_timesteps = 4
 # Set configuration parameters
 config = {
     'min_size': 50,  # Minimum size of cloud objects to be considered
-    'l_condition': 0.0004,#0.0002  # Threshold condition for liquid water
+    'l_condition': 0.001,#0.0002  # Threshold condition for liquid water
     'timestep_duration': 60,  # Duration between timesteps in seconds
     'distance_threshold': 3, # Max dist between merging clouds across boundary
     'plot_switch': False, # Plot cloud field at each timestep
-    'u_drift': -5.0, # m/s, taken from namelist
-    'v_drift': -4.0, # m/s, taken from namelist
+    'v_drift': -4.0, # -4. m/s, taken from namelist
+    'u_drift': -5.0, # -5. m/s, taken from namelist
     'horizontal_resolution': 25.0, # m, taken from namelist
 }
 

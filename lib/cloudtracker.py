@@ -1,41 +1,23 @@
+import utils.plotting_utils as plotting_utils
+import math
+
 class CloudTracker:
     def __init__(self, config):
         self.cloud_tracks = {}
         self.config = config
 
-    def translate_field(self, cloud, dx, dy):
-        # Translate the cloud by dx, dy
-        try:
-            translated_points = [(x + dx, y + dy, z) for x, y, z in cloud.points]
-            cloud.points = translated_points
-        except ValueError as e:
-            print(f"Error translating points: {e}")
-            print(f"cloud points: {cloud.points}")
-
-
     def drift_translation_calculation(self):
-        # calculate translation in grid units based off drift velocity and timestep duration
-        # note: very rough as using int() to round down to nearest grid unit
-        dx = int(self.config['u_drift'] * self.config['timestep_duration'] / self.config['horizontal_resolution'])
-        dy = int(self.config['v_drift'] * self.config['timestep_duration'] / self.config['horizontal_resolution'])
+        dx = int(self.config['u_drift'] * self.config['timestep_duration'])
+        dy = int(self.config['v_drift'] * self.config['timestep_duration'])
         return dx, dy
 
 
     def update_tracks(self, current_cloud_field):
-        dx, dy = self.drift_translation_calculation() # Get the drift translation in grid units
-        # print(f"dx: {dx}, dy: {dy}")  # print values for debugging
-        for track_id in list(self.cloud_tracks.keys()):
-            last_cloud_in_track = self. cloud_tracks[track_id][-1]
-            self.translate_field(last_cloud_in_track, dx, dy)
-
-        self.match_clouds(current_cloud_field)  # Match clouds to tracks
-        # -----
-        # if not self.cloud_tracks:  # If this is the first timestep
-        #     for cloud_id, cloud in current_cloud_field.clouds.items():
-        #         self.cloud_tracks[cloud_id] = [cloud]
-        # else:
-        #     self.match_clouds(current_cloud_field)
-        # -----
+        if not self.cloud_tracks:  # If this is the first timestep
+            for cloud_id, cloud in current_cloud_field.clouds.items():
+                self.cloud_tracks[cloud_id] = [cloud]
+        else:
+            self.match_clouds(current_cloud_field)
 
     def match_clouds(self, current_cloud_field):
         matched_clouds = set()
@@ -55,16 +37,30 @@ class CloudTracker:
             if cloud_id not in matched_clouds:
                 self.cloud_tracks[cloud_id] = [cloud]
 
-    # I wonder if it might be best to translate the cloud field here by u.v from the namelist
-
     def is_match(self, cloud, last_cloud_in_track):
-        # Calculate overlap between cloud points
-        current_cloud_points = set(cloud.points)
-        last_cloud_points = set(last_cloud_in_track.points)
-        overlap = current_cloud_points.intersection(last_cloud_points)
+        dx, dy = self.drift_translation_calculation() # Drift calculation per timestep
 
-        # Consider it a match if there is any overlap
-        return len(overlap) > 0
+        # Create a set of expected points for last_cloud considering drift
+        expected_last_cloud_points = {(x + dx, y + dy, z) for x, y, z in last_cloud_in_track.points}
+
+        # Get points of the current cloud
+        current_cloud_points = set(cloud.points)
+
+        threshold = self.config['horizontal_resolution']
+        threshold_squared = threshold ** 2
+
+        for cx, cy, cz in current_cloud_points:
+            for ex, ey, ez in expected_last_cloud_points:
+                distance_squared = (ex - cx) ** 2 + (ey - cy) ** 2 + (ez - cz) ** 2
+                if distance_squared <= threshold_squared:
+                    return True
+        return False
+
+        # Visualize the points
+        # last_cloud_points = set(last_cloud_in_track.points)
+        #plotting_utils.visualize_points(last_cloud_points, expected_last_cloud_points, current_cloud_points)
+        #plotting_utils.visualize_points_plotly(last_cloud_points,expected_last_cloud_points,current_cloud_points)
+
 
     def get_tracks(self):
         return self.cloud_tracks
