@@ -1,6 +1,84 @@
 import matplotlib.pyplot as plt
 from netCDF4 import Dataset
 import numpy as np
+from mpl_toolkits.mplot3d import Axes3D
+import plotly.graph_objects as go
+from datetime import datetime
+
+
+def visualize_points(last_cloud_points, expected_last_cloud_points, current_cloud_points):
+    """used to visualise:
+        cloud field from the timestep n+1 (current cloud)
+        cloud field of timestep n (last cloud points) and
+        the shifted cloud of timestep n (expected points post drift).
+        Primary use in cloudtracker.py in is_match functions.
+        Produces an interactive 3D plot using matplotlib - mid simulation!
+    """
+    fi
+    fig = plt.figure()
+    ax = fig.add_subplot(111, projection='3d')
+
+    # Plot last cloud points
+    if last_cloud_points:
+        lx, ly, lz = zip(*last_cloud_points)
+        ax.scatter(lx, ly, lz, color='r', label='Last Cloud Points')
+
+    # Plot expected positions after drift
+    if expected_last_cloud_points:
+        ex, ey, ez = zip(*expected_last_cloud_points)
+        ax.scatter(ex, ey, ez, color='g', alpha=0.5, label='Expected Points Post-Drift')
+
+    # Plot current cloud points
+    if current_cloud_points:
+        cx, cy, cz = zip(*current_cloud_points)
+        ax.scatter(cx, cy, cz, color='b', alpha=0.5, label='Current Cloud Points')
+
+    ax.legend()
+    ax.set_xlabel('x')
+    ax.set_ylabel('y')
+    ax.set_zlabel('z')
+    plt.title('Cloud Point Comparison')
+    plt.show()
+
+
+def visualize_points_plotly(last_cloud_points, expected_last_cloud_points, current_cloud_points):
+    """used to visualise:
+        cloud field from the timestep n+1 (current cloud)
+        cloud field of timestep n (last cloud points) and
+        the shifted cloud of timestep n (expected points post drift).
+        Primary use in cloudtracker.py in is_match functions.
+        Produces interactive 3D plots and saves them using current datetime.
+    """
+    fig = go.Figure()
+
+    # Add last cloud points
+    if last_cloud_points:
+        lx, ly, lz = zip(*last_cloud_points)
+        fig.add_trace(go.Scatter3d(
+            x=lx, y=ly, z=lz, mode='markers', marker=dict(size=4, color='red'), 
+            name='Last Cloud Points'))
+
+    # Add expected points after drift
+    if expected_last_cloud_points:
+        ex, ey, ez = zip(*expected_last_cloud_points)
+        fig.add_trace(go.Scatter3d(
+            x=ex, y=ey, z=ez, mode='markers', marker=dict(size=4, color='green', opacity=0.5),
+            name='Expected Points Post-Drift'))
+
+    # Add current cloud points
+    if current_cloud_points:
+        cx, cy, cz = zip(*current_cloud_points)
+        fig.add_trace(go.Scatter3d(
+            x=cx, y=cy, z=cz, mode='markers', marker=dict(size=4, color='blue', opacity=0.5), 
+            name='Current Cloud Points'))
+
+    fig.update_layout(title='Cloud Point Comparison', margin=dict(l=0, r=0, b=0, t=30))
+    fig.write_html('cloud_points_plot.html')  # Save the figure as an HTML file
+     # Generate a unique filename based on the current datetime
+    filename = f"cloud_points_plot_{datetime.now().strftime('%Y%m%d_%H%M%S%f')}.html"
+    fig.write_html(filename)  # Save the figure as an HTML file
+
+
 
 def plot_cloud_sizes(filename):
     with Dataset(filename, 'r') as dataset:
