@@ -13,7 +13,7 @@ def write_cloud_tracks_to_netcdf(tracks, file_path):
     # Prepare data arrays
     max_length = max(len(track) for track in tracks.values())
     num_tracks = len(tracks)
-    
+
     # Initializing data arrays with NaNs
     sizes = np.full((num_tracks, max_length), np.nan, dtype=np.float32)
     locations_x = np.full((num_tracks, max_length), np.nan, dtype=np.float32)

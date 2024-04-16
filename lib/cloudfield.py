@@ -4,6 +4,7 @@ from scipy.ndimage import binary_dilation
 from utils.plotting_utils import plot_labeled_regions
 from lib.cloud import Cloud
 
+
 class CloudField:
     def __init__(self, l_data,  timestep, config, xt, yt, zt):
         self.timestep = timestep
