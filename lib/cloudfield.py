@@ -6,6 +6,7 @@ from lib.cloud import Cloud
 
 
 class CloudField:
+    """Class to identify and track clouds in a labeled data field."""
     def __init__(self, l_data,  timestep, config, xt, yt, zt):
         self.timestep = timestep
         self.distance_threshold = config['distance_threshold']
@@ -38,9 +39,8 @@ class CloudField:
 
 
 
-
-
     def identify_regions(self, l_data, config):
+        """Identify cloudy regions in the labeled data."""
         condition = l_data > config['l_condition']
         labeled_array = measure.label(condition, connectivity=3)
         num_features = np.max(labeled_array)
@@ -51,6 +51,7 @@ class CloudField:
 
 
     def find_boundary_merges(self, labeled_array):
+        """Find merges between regions on opposite boundaries of the labeled array."""
         merges = []
         z, y, x = labeled_array.shape
         threshold = self.distance_threshold
@@ -113,6 +114,7 @@ class CloudField:
 
 
     def update_labels_for_merges(self, labeled_array, merges):
+        """Update labels for merging regions."""
         print ("Updating labels for merges...")
         for merge_pair in merges:
             # merge_pair is a tuple of two labels to be merged
@@ -123,6 +125,7 @@ class CloudField:
 
 
     def create_clouds_from_labeled_array(self, updated_labeled_array, l_data, config, xt, yt, zt):
+        """Create Cloud objects from the updated labeled array."""
         print ("Creating cloud data from labeled array...")
 
         # recalculate the clouds from the updated labeled array
@@ -153,8 +156,8 @@ class CloudField:
                 )
         print(f"Cloud data for {len(clouds)} objects.")
 
+        # print cloud data for debugging
         print_cloud_data_switch = False
-
         if print_cloud_data_switch == True:
             # print all data that the object cloud has
             for cloud in clouds:

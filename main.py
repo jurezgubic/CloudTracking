@@ -17,18 +17,20 @@ file_name = {
 output_netcdf_path = 'cloud_results.nc'
 
 # Set number of timesteps to process
-total_timesteps = 20
+total_timesteps = 5
 
 # Set configuration parameters
 config = {
     'min_size': 50,  # Minimum size of cloud objects to be considered
-    'l_condition': 0.0007,#0.0002  # Threshold condition for liquid water
+    'l_condition': 0.0009,#0.0002  # Threshold condition for liquid water
     'timestep_duration': 60,  # Duration between timesteps in seconds
     'distance_threshold': 3, # Max dist between merging clouds across boundary
     'plot_switch': False, # Plot cloud field at each timestep
-    'v_drift': -0.0, # -4. m/s, taken from namelist
-    'u_drift': -0.0, # -5. m/s, taken from namelist
+    'v_drift': -4.0, # -4. m/s, taken from namelist
+    'u_drift': -5.0, # -5. m/s, taken from namelist
     'horizontal_resolution': 25.0, # m, taken from namelist
+    'switch_background_drift': False, # True if you want to subtract the background drift
+    'switch_wind_drift': True, # True if you want to subtract the wind drift
 }
 
 
