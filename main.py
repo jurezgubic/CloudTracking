@@ -22,7 +22,7 @@ total_timesteps = 5
 # Set configuration parameters
 config = {
     'min_size': 50,  # Minimum size of cloud objects to be considered
-    'l_condition': 0.0009,#0.0002  # Threshold condition for liquid water
+    'l_condition': 0.001,#0.0002  # Threshold condition for liquid water
     'timestep_duration': 60,  # Duration between timesteps in seconds
     'distance_threshold': 3, # Max dist between merging clouds across boundary
     'plot_switch': False, # Plot cloud field at each timestep
@@ -62,11 +62,16 @@ for timestep in range(total_timesteps):
     # Track clouds across timesteps
     cloud_tracker.update_tracks(cloud_field, mean_u, mean_v, cloud_field.zt)
 
+    # Write cloud track information to netCDF
+    write_cloud_tracks_to_netcdf(cloud_tracker.get_tracks(), output_netcdf_path, timestep)
+
 print("Cloud tracking complete.")
 
-# Write cloud track information to netCDF
-write_cloud_tracks_to_netcdf(cloud_tracker.get_tracks(), output_netcdf_path)
 
-print("Cloud track information written to netCDF.")
+
+
+# old: Write cloud track information to netCDF
+#old: write_cloud_tracks_to_netcdf(cloud_tracker.get_tracks(), output_netcdf_path)
+#old: print("Cloud track information written to netCDF.")
 
 

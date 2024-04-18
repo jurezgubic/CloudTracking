@@ -1,59 +1,63 @@
-import xarray as xr
+from netCDF4 import Dataset
 import numpy as np
+import os
 
-def write_cloud_tracks_to_netcdf(tracks, file_path):
-    """
-    Write cloud track information to a netCDF file using xarray.
+def write_cloud_tracks_to_netcdf(tracks, file_path, timestep):
+    # Ensure the file exists and open for appending or create if not exists
+    if not os.path.exists(file_path):
+        root_grp = Dataset(file_path, 'w', format='NETCDF4')
+        root_grp.createDimension('track', None)  # Unlimited dimension
+        root_grp.createDimension('time', None)  # Unlimited dimension
+        root_grp.createDimension('point', 10000)  # Static dimension
+        root_grp.createDimension('coordinate', 3)  # Static dimension for 3D points
 
-    Parameters:
-    - tracks: Dictionary containing cloud track information, including points for each cloud.
-    - file_path: Path to the netCDF file to be created.
-    """
+        root_grp.createVariable('size', 'f4', ('track', 'time'))
+        root_grp.createVariable('location_x', 'f4', ('track', 'time'))
+        root_grp.createVariable('location_y', 'f4', ('track', 'time'))
+        root_grp.createVariable('location_z', 'f4', ('track', 'time'))
+        root_grp.createVariable('cloud_points', 'f4', ('track', 'time', 'point', 'coordinate'))
 
-    # Prepare data arrays
-    max_length = max(len(track) for track in tracks.values())
-    num_tracks = len(tracks)
+        root_grp.close()
 
-    # Initializing data arrays with NaNs
-    sizes = np.full((num_tracks, max_length), np.nan, dtype=np.float32)
-    locations_x = np.full((num_tracks, max_length), np.nan, dtype=np.float32)
-    locations_y = np.full((num_tracks, max_length), np.nan, dtype=np.float32)
-    locations_z = np.full((num_tracks, max_length), np.nan, dtype=np.float32)
+    # Open the file for appending
+    with Dataset(file_path, 'a') as root_grp:
+        # Check if the variables exist (important if the file was just created)
+        if 'size' not in root_grp.variables:
+            size_var = root_grp.createVariable('size', 'f4', ('track', 'time'))
+        else:
+            size_var = root_grp.variables['size']
 
-    # Prepare a variable for cloud points, initializing with a fixed size or dynamically adjust based on maximum points found
-    # Example with fixed size, adjust `max_points` as needed
-    max_points = 10000  # You might want to calculate this based on your data
-    cloud_points = np.full((num_tracks, max_length, max_points, 3), np.nan, dtype=np.float32)
+        if 'location_x' not in root_grp.variables:
+            loc_x_var = root_grp.createVariable('location_x', 'f4', ('track', 'time'))
+        else:
+            loc_x_var = root_grp.variables['location_x']
 
+        if 'location_y' not in root_grp.variables:
+            loc_y_var = root_grp.createVariable('location_y', 'f4', ('track', 'time'))
+        else:
+            loc_y_var = root_grp.variables['location_y']
 
+        if 'location_z' not in root_grp.variables:
+            loc_z_var = root_grp.createVariable('location_z', 'f4', ('track', 'time'))
+        else:
+            loc_z_var = root_grp.variables['location_z']
 
-    # Fill data arrays
-    track_ids = list(tracks.keys())
-    for i, track_id in enumerate(track_ids):
-        for j, cloud in enumerate(tracks[track_id]):
-            sizes[i, j] = cloud.size
-            locations_x[i, j], locations_y[i, j], locations_z[i, j] = cloud.location
-            # For cloud points, assume cloud.points is a list of tuples [(x1, y1), (x2, y2), ...]
-            for k, point in enumerate(cloud.points[:max_points]):
-                cloud_points[i, j, k, :] = point
+        if 'cloud_points' not in root_grp.variables:
+            cloud_points_var = root_grp.createVariable('cloud_points', 'f4', ('track', 'time', 'point', 'coordinate'))
+        else:
+            cloud_points_var = root_grp.variables['cloud_points']
 
-    # Create xarray Dataset
-    ds = xr.Dataset({
-        "size": (["track", "time"], sizes),
-        "location_x": (["track", "time"], locations_x),
-        "location_y": (["track", "time"], locations_y),
-        "location_z": (["track", "time"], locations_z),
-        "cloud_points": (["track", "time", "point", "coordinate"], cloud_points),
-    }, coords={
-        "track": track_ids,
-        "time": np.arange(max_length),
-        "point": np.arange(max_points),
-        "coordinate": np.arange(3)  # Ensure this aligns with your data structure for 3D points
-    })
+        # Make sure we have enough space for tracks and timesteps
+        num_tracks = len(tracks)
+        required_tracks = max(num_tracks, len(root_grp.dimensions['track']))
+        required_timesteps = timestep + 1  # Assuming timestep is zero-indexed
 
-    # Add global attributes
-    ds.attrs["description"] = "Cloud tracking information"
-
-    # Write to netCDF
-    ds.to_netcdf(file_path)
+        # Assign data for each track
+        for i, track_id in enumerate(tracks):
+            track = tracks[track_id][-1]  # Assuming the latest state is what you want
+            size_var[i, timestep] = track.size
+            loc_x_var[i, timestep], loc_y_var[i, timestep], loc_z_var[i, timestep] = track.location
+            points = np.array([list(p) for p in track.points[:10000]])
+            if len(points) > 0:  # Ensure there are points to record
+                cloud_points_var[i, timestep, :len(points), :] = points
 
