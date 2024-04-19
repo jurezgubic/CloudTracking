@@ -37,11 +37,36 @@ class CloudTracker:
         self.mean_u = mean_u
         self.mean_v = mean_v
         self.zt = zt
+        new_matched_clouds = set()
+
         if not self.cloud_tracks:  # If this is the first timestep
             for cloud_id, cloud in current_cloud_field.clouds.items():
                 self.cloud_tracks[cloud_id] = [cloud]
         else:
-            self.match_clouds(current_cloud_field)
+            for track_id, track in list(self.cloud_tracks.items()):
+                last_cloud_in_track = track[-1]
+                found_match = False
+
+                for cloud_id, cloud in current_cloud_field.clouds.items():
+                    if cloud_id not in new_matched_clouds and self.is_match(cloud, last_cloud_in_track):
+                        track.append(cloud)
+                        new_matched_clouds.add(cloud_id)
+                        found_match = True
+                        break
+
+                if not found_match:
+                    last_cloud_in_track.is_active = False  # Mark the last cloud as inactive
+
+            # Add new clouds as new tracks
+            for cloud_id, cloud in current_cloud_field.clouds.items():
+                if cloud_id not in new_matched_clouds:
+                    self.cloud_tracks[cloud_id] = [cloud]
+
+        #if not self.cloud_tracks:  # If this is the first timestep
+        #    for cloud_id, cloud in current_cloud_field.clouds.items():
+        #        self.cloud_tracks[cloud_id] = [cloud]
+        #else:
+        #    self.match_clouds(current_cloud_field)
 
 
     def match_clouds(self, current_cloud_field):
@@ -76,7 +101,6 @@ class CloudTracker:
         threshold_squared = threshold ** 2 # Squared for faster calculation
 
         # Check if any point in the current cloud is within the threshold of the last cloud in the track
-        dx, dy = self.drift_translation_calculation()
         for cx, cy, cz in cloud.points:
             wind_dx, wind_dy = self.wind_drift_calculation(cz)
             for ex, ey, ez in last_cloud_in_track.points:
