@@ -138,9 +138,8 @@ class CloudField:
                 cloud_id = f"{self.timestep}-{region.label}"
                 cloud_mask = updated_labeled_array == region.label
                 points = np.argwhere(cloud_mask)
-                #points = [tuple(point) for point in points]
-
                 points = [(xt[x], yt[y], zt[z]) for z, y, x in points]
+                max_height = np.max([point[2] for point in points])
 
                 # Estimate the surface area
                 surface_mask = binary_dilation(cloud_mask) & ~cloud_mask
@@ -152,6 +151,7 @@ class CloudField:
                     surface_area=surface_area,
                     location=(region.centroid[2], region.centroid[1], region.centroid[0]),
                     points=points,
+                    max_height=max_height,
                     timestep=self.timestep
                 )
         print(f"Cloud data for {len(clouds)} objects.")

@@ -43,18 +43,23 @@ class CloudTracker:
             for cloud_id, cloud in current_cloud_field.clouds.items():
                 self.cloud_tracks[cloud_id] = [cloud]
         else:
+            # check each existing track for a match in the current cloud field
             for track_id, track in list(self.cloud_tracks.items()):
                 last_cloud_in_track = track[-1]
                 found_match = False
 
                 for cloud_id, cloud in current_cloud_field.clouds.items():
                     if cloud_id not in new_matched_clouds and self.is_match(cloud, last_cloud_in_track):
+                        current_max_height = max(z for _, _, z in cloud.points)
+                        if current_max_height > last_cloud_in_track.max_height:
+                            last_cloud_in_track.max_height = current_max_height
                         track.append(cloud)
                         new_matched_clouds.add(cloud_id)
                         found_match = True
                         break
 
                 if not found_match:
+                    # ensure that only the currenty instance of cloud is marked as inactive
                     last_cloud_in_track.is_active = False  # Mark the last cloud as inactive
 
             # Add new clouds as new tracks
@@ -62,11 +67,6 @@ class CloudTracker:
                 if cloud_id not in new_matched_clouds:
                     self.cloud_tracks[cloud_id] = [cloud]
 
-        #if not self.cloud_tracks:  # If this is the first timestep
-        #    for cloud_id, cloud in current_cloud_field.clouds.items():
-        #        self.cloud_tracks[cloud_id] = [cloud]
-        #else:
-        #    self.match_clouds(current_cloud_field)
 
 
     def match_clouds(self, current_cloud_field):
