@@ -1,5 +1,7 @@
 from skimage import measure
 import numpy as np
+import gc
+from memory_profiler import profile
 from scipy.ndimage import binary_dilation
 from utils.plotting_utils import plot_labeled_regions
 from lib.cloud import Cloud
@@ -123,7 +125,7 @@ class CloudField:
                 labeled_array[labeled_array == label] = min_label
         return labeled_array
 
-
+    # @profile
     def create_clouds_from_labeled_array(self, updated_labeled_array, l_data, config, xt, yt, zt):
         """Create Cloud objects from the updated labeled array."""
         print ("Creating cloud data from labeled array...")

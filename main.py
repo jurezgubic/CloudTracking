@@ -1,3 +1,5 @@
+from memory_profiler import profile
+import gc
 from src.data_management import load_cloud_field_from_file, calculate_mean_velocities
 from src.netcdf_writer import write_cloud_tracks_to_netcdf
 from lib.cloudtracker import CloudTracker
@@ -17,12 +19,12 @@ file_name = {
 output_netcdf_path = 'cloud_results.nc'
 
 # Set number of timesteps to process
-total_timesteps = 6
+total_timesteps = 5
 
 # Set configuration parameters
 config = {
     'min_size': 50,  # Minimum size of cloud objects to be considered
-    'l_condition': 0.0009,#0.0002  # Threshold condition for liquid water
+    'l_condition': 0.001,#0.0002  # Threshold condition for liquid water
     'timestep_duration': 60,  # Duration between timesteps in seconds
     'distance_threshold': 3, # Max dist between merging clouds across boundary
     'plot_switch': False, # Plot cloud field at each timestep
@@ -45,33 +47,36 @@ config = {
 # print(f"Output netcdf file path: {output_netcdf_path}")
 
 
-# Initialize CloudTracker
-cloud_tracker = CloudTracker(config)
+# @profile
+def process_clouds(cloud_tracker):
+    for timestep in range(total_timesteps):
+        print ("-"*50)
+        print(f"Processing timestep {timestep+1} of {total_timesteps}")
 
-# Process each timestep
-for timestep in range(total_timesteps):
-    print ("-"*50)
-    print(f"Processing timestep {timestep+1} of {total_timesteps}")
+        # Load cloud field for the current timestep
+        cloud_field = load_cloud_field_from_file(base_file_path, file_name, timestep, config)
 
-    # Load cloud field for the current timestep
-    cloud_field = load_cloud_field_from_file(base_file_path, file_name, timestep, config)
+        # Calculate mean velocities for the current timestep
+        mean_u, mean_v = calculate_mean_velocities(base_file_path, file_name, timestep)
 
-    # Calculate mean velocities for the current timestep
-    mean_u, mean_v = calculate_mean_velocities(base_file_path, file_name, timestep)
+        # Track clouds across timesteps
+        cloud_tracker.update_tracks(cloud_field, mean_u, mean_v, cloud_field.zt)
 
-    # Track clouds across timesteps
-    cloud_tracker.update_tracks(cloud_field, mean_u, mean_v, cloud_field.zt)
+        # Write cloud track information to netCDF
+        write_cloud_tracks_to_netcdf(cloud_tracker.get_tracks(), output_netcdf_path, timestep)
+        gc.collect()
 
-    # Write cloud track information to netCDF
-    write_cloud_tracks_to_netcdf(cloud_tracker.get_tracks(), output_netcdf_path, timestep)
-
-print("Cloud tracking complete.")
-
+    print("Cloud tracking complete.")
 
 
+def main():
+    # Initialize CloudTracker
+    cloud_tracker = CloudTracker(config)
 
-# old: Write cloud track information to netCDF
-#old: write_cloud_tracks_to_netcdf(cloud_tracker.get_tracks(), output_netcdf_path)
-#old: print("Cloud track information written to netCDF.")
+    # Process clouds
+    process_clouds(cloud_tracker)
+
+if __name__ == "__main__":
+    main()
 
 

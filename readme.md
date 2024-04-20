@@ -1,11 +1,16 @@
-Creating a 3D cloud tracking code.
+3d Cloud tracking code
 
-To do
-- Add logic for splitting and merging. 
-- Add transformation of the field using wind vectors to improve matching.
-- Memory management. Max two cloudfields at a time.
-- Additional/different write-out logic: create writeout util that's called iteratively in the main.py for loop.
-  
+Running the code (on its own):
+1. Set config file in main.py
+2. Set correct path to LES data.
+3. Run with "python main.py"
+4. To inspect output run analysis/output_analysis.ipynb notebook.
+
+Running the code (with memory profiler):
+- Uncomment profiler decorators 
+- Or "mprof run main.py" and then plot using "mprof plot"
+- Warning: Do NOT run for the entire dataset (far too expensive). 
+ 
 
 
 

@@ -1,8 +1,9 @@
 from netCDF4 import Dataset
 import numpy as np
 from lib.cloudfield import CloudField
+from memory_profiler import profile
 
-
+# @profile
 def load_cloud_field_from_file(file_path, file_name, timestep, config):
     """
     Load cloud data from files for a specific timestep and create a CloudField object.
@@ -16,9 +17,9 @@ def load_cloud_field_from_file(file_path, file_name, timestep, config):
     xt = l_dataset.variables['xt'][:]
     yt = l_dataset.variables['yt'][:]
     zt = l_dataset.variables['zt'][:]
-
-    return CloudField(l_data, timestep, config, xt, yt, zt)
-
+    cloud_field = CloudField(l_data, timestep, config, xt, yt, zt)
+    del l_data, xt, yt, zt
+    return cloud_field
 
 def load_u_field(file_path, file_name, timestep):
     """
@@ -28,14 +29,13 @@ def load_u_field(file_path, file_name, timestep):
     u_dataset = Dataset(f"{file_path}{file_name}", 'r')
     return u_dataset.variables['u'][timestep, :, :, :]
 
-
 def load_v_field(file_path, file_name, timestep):
     """
     Load v wind data from files for a specific timestep.
     Returns: v wind data for the given timestep.
     """
     v_dataset = Dataset(f"{file_path}{file_name}", 'r')
-    return v_dataset.variables['v'][timestep, :, :, :]
+    return v_dataset.variables['v'][timestep, :, :, :] 
 
 
 def load_w_field(file_path, file_name, timestep):

@@ -1,6 +1,9 @@
 import utils.plotting_utils as plotting_utils
 import math
 import numpy as np
+import gc
+from memory_profiler import profile
+
 
 class CloudTracker:
     """"Class to track clouds over time."""
@@ -88,7 +91,7 @@ class CloudTracker:
             if cloud_id not in matched_clouds:
                 self.cloud_tracks[cloud_id] = [cloud]
 
-
+    # @profile
     def is_match(self, cloud, last_cloud_in_track):
         """ Check if the cloud is a match to the last cloud in the track.
         This is done by checking if any point in the current cloud is within the
