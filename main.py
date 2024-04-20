@@ -19,12 +19,14 @@ file_name = {
 output_netcdf_path = 'cloud_results.nc'
 
 # Set number of timesteps to process
-total_timesteps = 5
+total_timesteps = 10
 
 # Set configuration parameters
 config = {
     'min_size': 50,  # Minimum size of cloud objects to be considered
-    'l_condition': 0.001,#0.0002  # Threshold condition for liquid water
+    'l_condition': 0.001,#0.0002  # Minimum threshold for liquid water
+    'w_condition': 2.0,  # Minimum condition for vertical velocity
+    'w_switch': True,  # True if you want to use vertical velocity threshold
     'timestep_duration': 60,  # Duration between timesteps in seconds
     'distance_threshold': 3, # Max dist between merging clouds across boundary
     'plot_switch': False, # Plot cloud field at each timestep
@@ -36,17 +38,6 @@ config = {
 }
 
 
-# set proper output file path (placeholder for later)
-# import os
-# import datetime
-# today = datetime.date.today()
-# output_folder = f'output/{today}'
-# if not os.path.exists(output_folder):
-#     os.makedirs(output_folder)
-# output_netcdf_path = f'{output_folder}/{total_timesteps}timesteps_{config["l_condition"]}l_condition.nc'
-# print(f"Output netcdf file path: {output_netcdf_path}")
-
-
 # @profile
 def process_clouds(cloud_tracker):
     for timestep in range(total_timesteps):
@@ -54,7 +45,10 @@ def process_clouds(cloud_tracker):
         print(f"Processing timestep {timestep+1} of {total_timesteps}")
 
         # Load cloud field for the current timestep
-        cloud_field = load_cloud_field_from_file(base_file_path, file_name, timestep, config)
+        cloud_field = data_management.load_cloud_field_from_file(base_file_path, file_name, timestep, config)
+
+        # Load cloud field for the current timestep
+        #cloud_field = load_cloud_field_from_file(base_file_path, file_name, timestep, config)
 
         # Calculate mean velocities for the current timestep
         mean_u, mean_v = calculate_mean_velocities(base_file_path, file_name, timestep)
@@ -78,5 +72,16 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
+# set proper output file path (placeholder for later)
+# import os
+# import datetime
+# today = datetime.date.today()
+# output_folder = f'output/{today}'
+# if not os.path.exists(output_folder):
+#     os.makedirs(output_folder)
+# output_netcdf_path = f'{output_folder}/{total_timesteps}timesteps_{config["l_condition"]}l_condition.nc'
+# print(f"Output netcdf file path: {output_netcdf_path}")
 
 

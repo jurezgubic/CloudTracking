@@ -9,7 +9,7 @@ from lib.cloud import Cloud
 
 class CloudField:
     """Class to identify and track clouds in a labeled data field."""
-    def __init__(self, l_data,  timestep, config, xt, yt, zt):
+    def __init__(self, l_data, w_data,  timestep, config, xt, yt, zt):
         self.timestep = timestep
         self.distance_threshold = config['distance_threshold']
         self.xt = xt
@@ -17,7 +17,7 @@ class CloudField:
         self.zt = zt
 
         # creates a labeled array of objects
-        labeled_array = self.identify_regions(l_data, config)
+        labeled_array = self.identify_regions(l_data, w_data, config)
 
         if config['plot_switch'] == True:
             plot_labeled_regions('labeled', labeled_array, timestep=timestep, plot_all_levels=True)
@@ -41,9 +41,13 @@ class CloudField:
 
 
 
-    def identify_regions(self, l_data, config):
+    def identify_regions(self, l_data, w_data, config):
         """Identify cloudy regions in the labeled data."""
-        condition = l_data > config['l_condition']
+        if config['w_switch'] == True:
+            condition = (l_data > config['l_condition']) & (w_data >= config['w_condition'])
+        else:
+            condition = l_data > config['l_condition']
+
         labeled_array = measure.label(condition, connectivity=3)
         num_features = np.max(labeled_array)
         print(f"Objects labeled. Number of initial features: {num_features}")
