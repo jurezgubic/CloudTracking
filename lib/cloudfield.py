@@ -28,7 +28,7 @@ class CloudField:
         updated_labeled_array = self.update_labels_for_merges(labeled_array, merges)
         # create cloud data from updated labeled array
         self.clouds = self.create_clouds_from_labeled_array(
-            updated_labeled_array, l_data, config, xt, yt, zt)
+            updated_labeled_array, l_data, w_data, config, xt, yt, zt)
 
         if config['plot_switch'] == True:
             plot_labeled_regions('updated', updated_labeled_array, timestep=timestep, plot_all_levels=True)
@@ -130,12 +130,15 @@ class CloudField:
         return labeled_array
 
     # @profile
-    def create_clouds_from_labeled_array(self, updated_labeled_array, l_data, config, xt, yt, zt):
+    def create_clouds_from_labeled_array(self, updated_labeled_array, l_data, w_data, config, xt, yt, zt):
         """Create Cloud objects from the updated labeled array."""
         print ("Creating cloud data from labeled array...")
 
         # recalculate the clouds from the updated labeled array
         regions = measure.regionprops(updated_labeled_array, l_data)
+
+        #find height index of cloud base
+        base_index = np.abs(zt - config['cloud_base_altitude']).argmin()
 
         # Create Cloud objects for each identified cloud
         clouds = {}
@@ -143,8 +146,20 @@ class CloudField:
             if region.area >= config['min_size']:
                 cloud_id = f"{self.timestep}-{region.label}"
                 cloud_mask = updated_labeled_array == region.label
-                points = np.argwhere(cloud_mask)
-                points = [(xt[x], yt[y], zt[z]) for z, y, x in points]
+                point_indices = np.argwhere(cloud_mask)
+                points = [(xt[x], yt[y], zt[z]) for z, y, x in point_indices]
+
+                # Extract vertical velocity variables
+                w_values = [w_data[z, y, x] for z, y, x in point_indices]
+                max_w = np.max(w_values)
+                base_w_values = [w_data[z, y, x] for z, y, x in point_indices if zt[z] == zt[base_index]]
+                max_w_cloud_base = np.max(base_w_values) if base_w_values else np.nan
+
+                # estimate area of cloud base
+                base_points = [point for point in points if point[2] == zt[base_index]]
+                cloud_base_area = len(base_points)*config['horizontal_resolution']**2
+
+                # estimate max height of cloud
                 max_height = np.max([point[2] for point in points])
 
                 # Estimate the surface area
@@ -158,6 +173,9 @@ class CloudField:
                     location=(region.centroid[2], region.centroid[1], region.centroid[0]),
                     points=points,
                     max_height=max_height,
+                    max_w=max_w,
+                    max_w_cloud_base=max_w_cloud_base,
+                    cloud_base_area=cloud_base_area,
                     timestep=self.timestep
                 )
         print(f"Cloud data for {len(clouds)} objects.")
