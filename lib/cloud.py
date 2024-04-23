@@ -1,5 +1,7 @@
 class Cloud:
+    """ Create a cloud object """
     def __init__(self, cloud_id, size, surface_area, cloud_base_area, location, points, timestep, max_height, max_w, max_w_cloud_base, is_active=True):
+        """ Initialize the cloud object """
         self.cloud_id = cloud_id
         self.size = size
         self.surface_area = surface_area
@@ -13,6 +15,7 @@ class Cloud:
         self.is_active = is_active
 
     def update_max_height(self, new_height):
+        """ Update the max height of the cloud """
         if new_height > self.max_height:
             self.max_height = new_height
 

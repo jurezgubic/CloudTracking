@@ -17,8 +17,8 @@ class CloudTracker:
     def drift_translation_calculation(self):
         """ Calculate drift translation based on the namelist drift values. """
         if self.config['switch_background_drift'] == True:
-            dx = int(self.config['u_drift'] * self.config['timestep_duration'])
-            dy = int(self.config['v_drift'] * self.config['timestep_duration'])
+            dx = int(self.config['u_drift'] * self.config['timestep_duration']) # Drift in x-direction
+            dy = int(self.config['v_drift'] * self.config['timestep_duration']) # Drift in y-direction
         else:
             dx = dy = 0
         return dx, dy
@@ -28,8 +28,8 @@ class CloudTracker:
         """ Calculate wind drift based on the height of the cloud point using pre-loaded mean wind data. """
         if self.config['switch_wind_drift'] == True:
             z_index = np.argmin(np.abs(self.zt - cz))  # Find nearest z-level index
-            wind_dx = self.mean_u[z_index] * self.config['timestep_duration']
-            wind_dy = self.mean_v[z_index] * self.config['timestep_duration']
+            wind_dx = self.mean_u[z_index] * self.config['timestep_duration'] # Wind drift in x-direction
+            wind_dy = self.mean_v[z_index] * self.config['timestep_duration'] # Wind drift in y-direction
         else:
             wind_dx = wind_dy = 0
         return wind_dx, wind_dy
@@ -43,21 +43,21 @@ class CloudTracker:
         new_matched_clouds = set()
 
         if not self.cloud_tracks:  # If this is the first timestep
-            for cloud_id, cloud in current_cloud_field.clouds.items():
-                self.cloud_tracks[cloud_id] = [cloud]
+            for cloud_id, cloud in current_cloud_field.clouds.items(): # Add all clouds as new tracks
+                self.cloud_tracks[cloud_id] = [cloud] # Add the cloud as a new track
         else:
             # check each existing track for a match in the current cloud field
             for track_id, track in list(self.cloud_tracks.items()):
                 last_cloud_in_track = track[-1]
                 found_match = False
 
-                for cloud_id, cloud in current_cloud_field.clouds.items():
-                    if cloud_id not in new_matched_clouds and self.is_match(cloud, last_cloud_in_track):
-                        current_max_height = max(z for _, _, z in cloud.points)
-                        if current_max_height > last_cloud_in_track.max_height:
-                            last_cloud_in_track.max_height = current_max_height
-                        track.append(cloud)
-                        new_matched_clouds.add(cloud_id)
+                for cloud_id, cloud in current_cloud_field.clouds.items(): # Check if the cloud is a match
+                    if cloud_id not in new_matched_clouds and self.is_match(cloud, last_cloud_in_track): # If the cloud is a match
+                        current_max_height = max(z for _, _, z in cloud.points) # Update the max height of the cloud
+                        if current_max_height > last_cloud_in_track.max_height: # If the current cloud is higher
+                            last_cloud_in_track.max_height = current_max_height # Update the max height of the cloud
+                        track.append(cloud) # Add the cloud to the track
+                        new_matched_clouds.add(cloud_id) # Mark the cloud as matched
                         found_match = True
                         break
 
@@ -66,21 +66,21 @@ class CloudTracker:
                     last_cloud_in_track.is_active = False  # Mark the last cloud as inactive
 
             # Add new clouds as new tracks
-            for cloud_id, cloud in current_cloud_field.clouds.items():
-                if cloud_id not in new_matched_clouds:
-                    self.cloud_tracks[cloud_id] = [cloud]
+            for cloud_id, cloud in current_cloud_field.clouds.items(): # Add all unmatched clouds as new tracks
+                if cloud_id not in new_matched_clouds: # If the cloud is not matched
+                    self.cloud_tracks[cloud_id] = [cloud] # Add the cloud as a new track
 
 
 
     def match_clouds(self, current_cloud_field):
         """ Match clouds from the current cloud field to the existing tracks. """
         matched_clouds = set()
-        for track_id, track in self.cloud_tracks.items():
-            last_cloud_in_track = track[-1]
-            for cloud_id, cloud in current_cloud_field.clouds.items():
-                if cloud_id not in matched_clouds and self.is_match(cloud, last_cloud_in_track):
-                    self.cloud_tracks[track_id].append(cloud)
-                    matched_clouds.add(cloud_id)
+        for track_id, track in self.cloud_tracks.items(): # Check each existing track for a match in the current cloud field
+            last_cloud_in_track = track[-1] # Get the last cloud in the track
+            for cloud_id, cloud in current_cloud_field.clouds.items(): # Check if the cloud is a match
+                if cloud_id not in matched_clouds and self.is_match(cloud, last_cloud_in_track): # If the cloud is a match
+                    self.cloud_tracks[track_id].append(cloud) # Add the cloud to the track
+                    matched_clouds.add(cloud_id) # Mark the cloud as matched
                     break
             else:
                 # If no match is found, consider the cloud has dissipated or is out of bounds
@@ -105,10 +105,12 @@ class CloudTracker:
 
         # Check if any point in the current cloud is within the threshold of the last cloud in the track
         for cx, cy, cz in cloud.points:
-            wind_dx, wind_dy = self.wind_drift_calculation(cz)
+            wind_dx, wind_dy = self.wind_drift_calculation(cz) # Wind drift calculation per timestep
+            # Check if the point is within the threshold of the last cloud in the track
             for ex, ey, ez in last_cloud_in_track.points:
                 adjusted_dx = dx + wind_dx
                 adjusted_dy = dy + wind_dy
+                # Check if the point is within the threshold of the last cloud in the track
                 if ((ex - cx + adjusted_dx) ** 2 + (ey - cy + adjusted_dy) ** 2) <= threshold_squared:
                     return True
         return False

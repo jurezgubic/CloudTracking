@@ -24,12 +24,15 @@ class CloudField:
 
         # find merges between edge regions
         merges = self.find_boundary_merges(labeled_array)
+
         # update labels for merges
         updated_labeled_array = self.update_labels_for_merges(labeled_array, merges)
+
         # create cloud data from updated labeled array
         self.clouds = self.create_clouds_from_labeled_array(
             updated_labeled_array, l_data, w_data, config, xt, yt, zt)
 
+        # plot the updated labeled clouds if plot_switch is True
         if config['plot_switch'] == True:
             plot_labeled_regions('updated', updated_labeled_array, timestep=timestep, plot_all_levels=True)
 
@@ -48,6 +51,7 @@ class CloudField:
         else:
             condition = l_data > config['l_condition']
 
+        # Label the regions
         labeled_array = measure.label(condition, connectivity=3)
         num_features = np.max(labeled_array)
         print(f"Objects labeled. Number of initial features: {num_features}")
@@ -141,31 +145,32 @@ class CloudField:
         base_index = np.abs(zt - config['cloud_base_altitude']).argmin()
 
         # Create Cloud objects for each identified cloud
-        clouds = {}
-        for region in regions:
-            if region.area >= config['min_size']:
-                cloud_id = f"{self.timestep}-{region.label}"
-                cloud_mask = updated_labeled_array == region.label
-                point_indices = np.argwhere(cloud_mask)
-                points = [(xt[x], yt[y], zt[z]) for z, y, x in point_indices]
+        clouds = {} # dictionary to store cloud objects
+        for region in regions: # iterate over all regions
+            if region.area >= config['min_size']: # only consider regions larger than min_size
+                cloud_id = f"{self.timestep}-{region.label}" # unique id for the cloud
+                cloud_mask = updated_labeled_array == region.label # mask for the current region
+                point_indices = np.argwhere(cloud_mask) # indices of points in the region
+                points = [(xt[x], yt[y], zt[z]) for z, y, x in point_indices] # coordinates of points in the region
 
                 # Extract vertical velocity variables
-                w_values = [w_data[z, y, x] for z, y, x in point_indices]
+                w_values = [w_data[z, y, x] for z, y, x in point_indices] # vertical velocity values
                 max_w = np.max(w_values)
-                base_w_values = [w_data[z, y, x] for z, y, x in point_indices if zt[z] == zt[base_index]]
-                max_w_cloud_base = np.max(base_w_values) if base_w_values else np.nan
+                base_w_values = [w_data[z, y, x] for z, y, x in point_indices if zt[z] == zt[base_index]] # vertical velocity values at cloud base
+                max_w_cloud_base = np.max(base_w_values) if base_w_values else np.nan # max vertical velocity at cloud base
 
                 # estimate area of cloud base
-                base_points = [point for point in points if point[2] == zt[base_index]]
-                cloud_base_area = len(base_points)*config['horizontal_resolution']**2
+                base_points = [point for point in points if point[2] == zt[base_index]] # points at cloud base
+                cloud_base_area = len(base_points)*config['horizontal_resolution']**2 # area of cloud base
 
                 # estimate max height of cloud
                 max_height = np.max([point[2] for point in points])
 
-                # Estimate the surface area
+                # Estimate the surface area of the cloud
                 surface_mask = binary_dilation(cloud_mask) & ~cloud_mask
                 surface_area = np.sum(surface_mask)
 
+                # Create a Cloud object and store it in the dictionary
                 clouds[cloud_id] = Cloud(
                     cloud_id=cloud_id,
                     size=region.area,
@@ -180,10 +185,10 @@ class CloudField:
                 )
         print(f"Cloud data for {len(clouds)} objects.")
 
-        # print cloud data for debugging
+        # print cloud data for debugging purposes if print_cloud_data_switch is True
         print_cloud_data_switch = False
         if print_cloud_data_switch == True:
-            # print all data that the object cloud has
+            # print some of the data that the object cloud has
             for cloud in clouds:
                 # print a short line to separate the clouds
                 print("-------------------------------------------------------")
@@ -195,4 +200,3 @@ class CloudField:
                 print(clouds[cloud].points)
 
         return clouds
-

@@ -1,16 +1,17 @@
-3d Cloud tracking code
-
-
-# LES Cloud Data Tracking and Analysis code
+# LES Cloud Tracking and Analysis code
 
 ## Description and Aim
-This project provides Python code designed for the processing, analysis, and tracking of LES cloud data. The aim of is to facilitate easy and efficient analysis of cloud dynamics and properties over time.
+This project provides Python code designed for the processing, tracking, and analysing of LES cloud data. The aim of is to facilitate easy and efficient analysis of cloud dynamics and properties over time.
+
+See [Output Analysis Notebook](analysis/output_analysis.ipynb) for example usage. 
 
 ## Features
-- **Data Loading and Management**: Manage large sets of cloud data efficiently.
-- **Cloud Analysis**: Perform detailed analysis on cloud properties and dynamics.
-- **NetCDF Integration**: Utilize NetCDF files for robust data storage and retrieval.
-- **Cloud Tracking**: Track changes in cloud fields over time to observe trends and patterns.
+- **Cloud Analysis**: Tracks and analyses cloud data, including cloud volume, surface area, time, location, maximum height, cloud base size, maximum vertical velocity and maximum vertical velocity at the cloud base (currently).
+- **Data Loading and Management**: Manages large datasets using NetCDF.
+- **Dynamic Tracking**: Accounts for wind drift between time steps.
+- **Biperiodicity**: Works for biperiodic LES domains.
+- **Structure Identification Flexibility**: Allows for user choice of cloud identification thresholds, including liquid water, vertical velocity, and cloud size (currently).
+
 
 ## Summary of modules
 0. **input_field_analysis.ipynb**: Inspects basic characteristics of input data.
@@ -23,24 +24,23 @@ This project provides Python code designed for the processing, analysis, and tra
 7. **output_analysis.ipynb**: Basic analysis for RICO run. 
 
 
-## Installation
-
+## How to use
 ```bash
-git clone https://github.com/yourgithubusername/cloud-data-analysis-toolkit.git
-cd cloud-data-analysis-toolkit
+git clone https://github.com/jurezgubic/CloudTracker.git
+cd CloudTracker
 pip install -r requirements.txt
 ```
 
 ##  Running this code 
 ### On its own
 1. Set config file in main.py
-2. Set correct path to LES data.
-3. Run with "python main.py"
+2. Set correct paths to LES data.
+3. Run with `python main.py`
 4. To inspect output run analysis/output_analysis.ipynb notebook.
 
 
 ### With memory profiler
-- Uncomment profiler decorators 
-- Or "mprof run main.py" and then plot using "mprof plot"
+- Run with `python -m memory_profiler script_name.py`
+- Or`mprof run main.py`. Then plot using `mprof plot`
 - Warning: Do NOT run for the entire dataset (far too expensive). 
 

@@ -5,9 +5,12 @@ from src.netcdf_writer import write_cloud_tracks_to_netcdf
 from lib.cloudtracker import CloudTracker
 import src.data_management as data_management
 
+# Warning: user needs to modify: base_file_path, file_name, output_netcdf_path, total_timesteps and config
+
 # Set file paths and parameters
 base_file_path = '/Users/jure/PhD/coding/RICO_1hr/'
 
+# paths to the LES data files
 file_name = {
     'l': 'rico.l.nc',
     'u': 'rico.u.nc',
@@ -24,14 +27,14 @@ total_timesteps = 3
 # Set configuration parameters
 config = {
     'min_size': 50,  # Minimum size of cloud objects to be considered
-    'l_condition': 0.001,#0.0002  # Minimum threshold for liquid water
-    'w_condition': 0.0,  # Minimum condition for vertical velocity
+    'l_condition': 0.0008, # Minimum threshold for liquid water
+    'w_condition': 1.0,  # Minimum condition for vertical velocity
     'w_switch': True,  # True if you want to use vertical velocity threshold
     'timestep_duration': 60,  # Duration between timesteps in seconds
     'distance_threshold': 3, # Max dist between merging clouds across boundary
     'plot_switch': False, # Plot cloud field at each timestep
-    'v_drift': -4.0, # -4. m/s, taken from namelist
-    'u_drift': -5.0, # -5. m/s, taken from namelist
+    'v_drift': -4.0, # -4. m/s, taken from RICO namelist
+    'u_drift': -5.0, # -5. m/s, taken from RICO namelist
     'horizontal_resolution': 25.0, # m, taken from namelist
     'switch_background_drift': False, # True if you want to subtract the background drift
     'switch_wind_drift': True, # True if you want to subtract the wind drift
@@ -48,9 +51,6 @@ def process_clouds(cloud_tracker):
         # Load cloud field for the current timestep
         cloud_field = data_management.load_cloud_field_from_file(base_file_path, file_name, timestep, config)
 
-        # Load cloud field for the current timestep
-        #cloud_field = load_cloud_field_from_file(base_file_path, file_name, timestep, config)
-
         # Calculate mean velocities for the current timestep
         mean_u, mean_v = calculate_mean_velocities(base_file_path, file_name, timestep)
 
@@ -59,8 +59,9 @@ def process_clouds(cloud_tracker):
 
         # Write cloud track information to netCDF
         write_cloud_tracks_to_netcdf(cloud_tracker.get_tracks(), output_netcdf_path, timestep)
-        gc.collect()
 
+         # Force garbage collection to avoid memory issues
+        gc.collect()
     print("Cloud tracking complete.")
 
 
@@ -75,7 +76,7 @@ if __name__ == "__main__":
     main()
 
 
-# set proper output file path (placeholder for later)
+## set proper output file path (placeholder for later)
 # import os
 # import datetime
 # today = datetime.date.today()
