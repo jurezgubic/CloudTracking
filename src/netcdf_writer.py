@@ -13,6 +13,9 @@ def initialize_netcdf(file_path):
 
         root_grp.createVariable('size', 'f4', ('track', 'time'), fill_value=np.nan)
         root_grp.createVariable('max_height', 'f4', ('track', 'time'), fill_value=np.nan)
+        root_grp.createVariable('cloud_base_area', 'f4', ('track', 'time'), fill_value=np.nan)
+        root_grp.createVariable('max_w', 'f4', ('track', 'time'), fill_value=np.nan)
+        root_grp.createVariable('max_w_cloud_base', 'f4', ('track', 'time'), fill_value=np.nan)
         root_grp.createVariable('surface_area', 'f4', ('track', 'time'), fill_value=np.nan)
         root_grp.createVariable('location_x', 'f4', ('track', 'time'), fill_value=np.nan)
         root_grp.createVariable('location_y', 'f4', ('track', 'time'), fill_value=np.nan)
@@ -32,6 +35,9 @@ def write_cloud_tracks_to_netcdf(tracks, file_path, timestep):
         size_var = root_grp.variables['size']
         max_height_var = root_grp.variables['max_height']
         surface_area_var = root_grp.variables['surface_area']
+        cloud_base_area_var = root_grp.variables['cloud_base_area']
+        max_w_var = root_grp.variables['max_w']
+        max_w_cloud_base_var = root_grp.variables['max_w_cloud_base']
         loc_x_var = root_grp.variables['location_x']
         loc_y_var = root_grp.variables['location_y']
         loc_z_var = root_grp.variables['location_z']
@@ -45,6 +51,9 @@ def write_cloud_tracks_to_netcdf(tracks, file_path, timestep):
             if cloud.is_active:
                 size_var[i, timestep] = cloud.size
                 max_height_var[i, timestep] = cloud.max_height
+                max_w_var[i, timestep] = cloud.max_w
+                max_w_cloud_base_var[i, timestep] = cloud.max_w_cloud_base
+                cloud_base_area_var[i, timestep] = cloud.cloud_base_area
                 surface_area_var[i, timestep] = cloud.surface_area
                 loc_x_var[i, timestep], loc_y_var[i, timestep], loc_z_var[i, timestep] = cloud.location
                 points = np.array([list(p) for p in cloud.points[:10000]])
@@ -53,6 +62,9 @@ def write_cloud_tracks_to_netcdf(tracks, file_path, timestep):
                 # Set current and future entries to NaN for inactive clouds
                 size_var[i, timestep:] = np.nan
                 max_height_var[i, timestep:] = np.nan
+                max_w_var[i, timestep:] = np.nan
+                max_w_cloud_base_var[i, timestep:] = np.nan
+                cloud_base_area_var[i, timestep:] = np.nan
                 surface_area_var[i, timestep:] = np.nan
                 loc_x_var[i, timestep:] = np.nan
                 loc_y_var[i, timestep:] = np.nan
