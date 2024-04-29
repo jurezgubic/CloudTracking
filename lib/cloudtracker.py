@@ -53,6 +53,7 @@ class CloudTracker:
 
                 for cloud_id, cloud in current_cloud_field.clouds.items(): # Check if the cloud is a match
                     if cloud_id not in new_matched_clouds and self.is_match(cloud, last_cloud_in_track): # If the cloud is a match
+                        # print ("Processing cloud ID: ", cloud_id)
                         current_max_height = max(z for _, _, z in cloud.points) # Update the max height of the cloud
                         if current_max_height > last_cloud_in_track.max_height: # If the current cloud is higher
                             last_cloud_in_track.max_height = current_max_height # Update the max height of the cloud

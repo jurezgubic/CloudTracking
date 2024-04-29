@@ -1,5 +1,5 @@
 from memory_profiler import profile
-import gc
+import gc, time
 from src.data_management import load_cloud_field_from_file, calculate_mean_velocities
 from src.netcdf_writer import write_cloud_tracks_to_netcdf
 from lib.cloudtracker import CloudTracker
@@ -22,13 +22,13 @@ file_name = {
 output_netcdf_path = 'cloud_results.nc'
 
 # Set number of timesteps to process
-total_timesteps = 3
+total_timesteps = 40
 
 # Set configuration parameters
 config = {
     'min_size': 50,  # Minimum size of cloud objects to be considered
-    'l_condition': 0.0008, # Minimum threshold for liquid water
-    'w_condition': 1.0,  # Minimum condition for vertical velocity
+    'l_condition': 0.001, # Minimum threshold for liquid water
+    'w_condition': 0.0,  # Minimum condition for vertical velocity
     'w_switch': True,  # True if you want to use vertical velocity threshold
     'timestep_duration': 60,  # Duration between timesteps in seconds
     'distance_threshold': 3, # Max dist between merging clouds across boundary
@@ -45,6 +45,7 @@ config = {
 # @profile
 def process_clouds(cloud_tracker):
     for timestep in range(total_timesteps):
+        start = time.time() # Start timer
         print ("-"*50)
         print(f"Processing timestep {timestep+1} of {total_timesteps}")
 
@@ -62,6 +63,8 @@ def process_clouds(cloud_tracker):
 
          # Force garbage collection to avoid memory issues
         gc.collect()
+        stop = time.time() # Stop timer
+        print (f"Time taken: {(stop-start)/60:.1f} minutes")
     print("Cloud tracking complete.")
 
 

@@ -17,6 +17,7 @@ def initialize_netcdf(file_path):
         root_grp.createVariable('max_w', 'f4', ('track', 'time'), fill_value=np.nan)
         root_grp.createVariable('max_w_cloud_base', 'f4', ('track', 'time'), fill_value=np.nan)
         root_grp.createVariable('surface_area', 'f4', ('track', 'time'), fill_value=np.nan)
+        root_grp.createVariable('mass_flux', 'f4', ('track', 'time'), fill_value=np.nan)
         root_grp.createVariable('location_x', 'f4', ('track', 'time'), fill_value=np.nan)
         root_grp.createVariable('location_y', 'f4', ('track', 'time'), fill_value=np.nan)
         root_grp.createVariable('location_z', 'f4', ('track', 'time'), fill_value=np.nan)
@@ -38,6 +39,7 @@ def write_cloud_tracks_to_netcdf(tracks, file_path, timestep):
         cloud_base_area_var = root_grp.variables['cloud_base_area']
         max_w_var = root_grp.variables['max_w']
         max_w_cloud_base_var = root_grp.variables['max_w_cloud_base']
+        mass_flux_var = root_grp.variables['mass_flux']
         loc_x_var = root_grp.variables['location_x']
         loc_y_var = root_grp.variables['location_y']
         loc_z_var = root_grp.variables['location_z']
@@ -53,6 +55,7 @@ def write_cloud_tracks_to_netcdf(tracks, file_path, timestep):
                 max_height_var[i, timestep] = cloud.max_height
                 max_w_var[i, timestep] = cloud.max_w
                 max_w_cloud_base_var[i, timestep] = cloud.max_w_cloud_base
+                mass_flux_var[i, timestep] = cloud.mass_flux
                 cloud_base_area_var[i, timestep] = cloud.cloud_base_area
                 surface_area_var[i, timestep] = cloud.surface_area
                 loc_x_var[i, timestep], loc_y_var[i, timestep], loc_z_var[i, timestep] = cloud.location
@@ -64,6 +67,7 @@ def write_cloud_tracks_to_netcdf(tracks, file_path, timestep):
                 max_height_var[i, timestep:] = np.nan
                 max_w_var[i, timestep:] = np.nan
                 max_w_cloud_base_var[i, timestep:] = np.nan
+                mass_flux_var[i, timestep:] = np.nan
                 cloud_base_area_var[i, timestep:] = np.nan
                 surface_area_var[i, timestep:] = np.nan
                 loc_x_var[i, timestep:] = np.nan

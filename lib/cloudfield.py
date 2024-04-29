@@ -148,13 +148,16 @@ class CloudField:
         clouds = {} # dictionary to store cloud objects
         for region in regions: # iterate over all regions
             if region.area >= config['min_size']: # only consider regions larger than min_size
+                # print (f"Processing cloud {region.label}...")
+
                 cloud_id = f"{self.timestep}-{region.label}" # unique id for the cloud
                 cloud_mask = updated_labeled_array == region.label # mask for the current region
                 point_indices = np.argwhere(cloud_mask) # indices of points in the region
                 points = [(xt[x], yt[y], zt[z]) for z, y, x in point_indices] # coordinates of points in the region
 
-                # Extract vertical velocity variables
-                w_values = [w_data[z, y, x] for z, y, x in point_indices] # vertical velocity values
+                # extract values of w at the points
+                w_values = [w_data[z, y, x] for z, y, x in point_indices]
+                # Calculate vertical velocity variables
                 max_w = np.max(w_values)
                 base_w_values = [w_data[z, y, x] for z, y, x in point_indices if zt[z] == zt[base_index]] # vertical velocity values at cloud base
                 max_w_cloud_base = np.max(base_w_values) if base_w_values else np.nan # max vertical velocity at cloud base
@@ -170,6 +173,9 @@ class CloudField:
                 surface_mask = binary_dilation(cloud_mask) & ~cloud_mask
                 surface_area = np.sum(surface_mask)
 
+                # calculate mass flux
+                mass_flux = sum(w_data[z, y, x] * l_data[z, y, x] for z, y, x in point_indices)
+
                 # Create a Cloud object and store it in the dictionary
                 clouds[cloud_id] = Cloud(
                     cloud_id=cloud_id,
@@ -181,6 +187,7 @@ class CloudField:
                     max_w=max_w,
                     max_w_cloud_base=max_w_cloud_base,
                     cloud_base_area=cloud_base_area,
+                    mass_flux = mass_flux,
                     timestep=self.timestep
                 )
         print(f"Cloud data for {len(clouds)} objects.")
