@@ -5,11 +5,11 @@ from memory_profiler import profile
 from scipy.ndimage import binary_dilation
 from utils.plotting_utils import plot_labeled_regions
 from lib.cloud import Cloud
-
+import utils.constants as const
 
 class CloudField:
     """Class to identify and track clouds in a labeled data field."""
-    def __init__(self, l_data, w_data,  timestep, config, xt, yt, zt):
+    def __init__(self, l_data, w_data, p_data, theta_l_data, q_t_data, timestep, config, xt, yt, zt):
         self.timestep = timestep
         self.distance_threshold = config['distance_threshold']
         self.xt = xt
@@ -30,7 +30,7 @@ class CloudField:
 
         # create cloud data from updated labeled array
         self.clouds = self.create_clouds_from_labeled_array(
-            updated_labeled_array, l_data, w_data, config, xt, yt, zt)
+            updated_labeled_array, l_data, w_data, p_data, theta_l_data, q_t_data, config, xt, yt, zt)
 
         # plot the updated labeled clouds if plot_switch is True
         if config['plot_switch'] == True:
@@ -41,6 +41,7 @@ class CloudField:
             #'name_or_array', labeled_array, timestep=timestep, plot_all_levels=False, specific_level=50)
         # plot_labeled_regions(
             #'name_of_array', labeled_array, timestep=timestep, plot_all_levels=True) #plots all levels
+
 
 
 
@@ -134,7 +135,7 @@ class CloudField:
         return labeled_array
 
     # @profile
-    def create_clouds_from_labeled_array(self, updated_labeled_array, l_data, w_data, config, xt, yt, zt):
+    def create_clouds_from_labeled_array(self, updated_labeled_array, l_data, w_data, p_data, theta_l_data, q_t_data, config, xt, yt, zt):
         """Create Cloud objects from the updated labeled array."""
         print ("Creating cloud data from labeled array...")
 
@@ -173,8 +174,51 @@ class CloudField:
                 surface_mask = binary_dilation(cloud_mask) & ~cloud_mask
                 surface_area = np.sum(surface_mask)
 
+                # calculate ql flux
+                ql_flux = sum(w_data[z, y, x] * l_data[z, y, x] for z, y, x in point_indices)
+
+
+                # --------------------------------------------------------------------------------------------
+                # extract values of p, theta_l and q_t at cloud points
+                p_values = [p_data[z, y, x] for z, y, x in point_indices]
+                theta_l_values = [theta_l_data[z, y, x] for z, y, x in point_indices]
+                q_t_values = [q_t_data[z, y, x]/1000 for z, y, x in point_indices] # convert from g/kg to kg/kg
+                q_l_values  = [l_data[z, y, x]/1000 for z, y, x in point_indices] # convert from g/kg to kg/kg
+                q_v_values = [q_t - l for q_t, l in zip(q_t_values, q_l_values)]
+
+
+                #shape of something_data is (160, 512, 512)
+                # shape of something_values is (2596,)
+
+                # calculate temperature
+                def calculate_temperature(theta_l_points, p_points, q_t_points, l_points, q_v_points):
+                    """Calculate temperature from theta_l, pressure, total water and water vapour mixing ratios."""
+                    # Element-wise operations for kappa and T
+                    kappa_points = [(const.R_d / const.c_pd) * ((1 + q_v / const.epsilon) / (1 + q_v * (const.c_pv / const.c_pd))) for q_v in q_v_points]
+                    T_points = [theta_l * (const.c_pd / (const.c_pd - const.L_v * q_l)) * (const.p_0 / p) ** (-kappa) for theta_l, q_l, p, kappa in zip(theta_l_points, l_points, p_points, kappa_points)]
+                    return T_points
+
+                T_values = calculate_temperature(theta_l_values, p_values, q_t_values, q_l_values, q_v_values)
+
+                def calculate_density(T_points, p_points, q_l_points, q_v_points):
+                    """Calculate air density from temperature, pressure and liquid water mixing ratio."""
+                    p_v_points = [(q_v / (q_v + const.epsilon)) * p for q_v, p in zip(q_v_points, p_points)]
+                    rho_points = [(p - p_v) / (const.R_d * T) + (p_v / (const.R_v * T)) + (q_l * const.rho_l)  for T, p, q_l, q_v, p_v in zip(T_points, p_points, q_l_points, q_v_points, p_v_points)]
+                    return rho_points
+
+                # calculate air density
+                rho_values = calculate_density(T_values, p_values, q_l_values, q_v_values)
+
+
                 # calculate mass flux
-                mass_flux = sum(w_data[z, y, x] * l_data[z, y, x] for z, y, x in point_indices)
+                w_values = [w_data[z, y, x] for z, y, x in point_indices]
+                # mass flux = sum(w * density * horizontal area) for all points in the cloud
+                mass_flux_values = [(w * rho * config['horizontal_resolution']**2) for w, rho in zip(w_values, rho_values)]
+                mass_flux = sum(mass_flux_values)
+                # --------------------------------------------------------------------------------------------
+
+
+
 
                 # Create a Cloud object and store it in the dictionary
                 clouds[cloud_id] = Cloud(
@@ -187,6 +231,7 @@ class CloudField:
                     max_w=max_w,
                     max_w_cloud_base=max_w_cloud_base,
                     cloud_base_area=cloud_base_area,
+                    ql_flux = ql_flux,
                     mass_flux = mass_flux,
                     timestep=self.timestep
                 )
