@@ -2,7 +2,7 @@ from netCDF4 import Dataset
 import numpy as np
 import os
 
-def initialize_netcdf(file_path):
+def initialize_netcdf(file_path, zt):
     """Create a new NetCDF file with the necessary dimensions and variables for cloud tracking data."""
     # Create the file and define dimensions and variables
     with Dataset(file_path, 'w', format='NETCDF4') as root_grp:
@@ -10,6 +10,7 @@ def initialize_netcdf(file_path):
         root_grp.createDimension('time', None)  # Unlimited time dimension
         root_grp.createDimension('point', 10000)  # Static dimension for cloud points Warning: Not in use, crude test remnant!
         root_grp.createDimension('coordinate', 3)  # Static dimension for 3D coordinates
+        root_grp.createDimension('level', len(zt))  # Using consistent height levels
 
         root_grp.createVariable('size', 'f4', ('track', 'time'), fill_value=np.nan)
         root_grp.createVariable('max_height', 'f4', ('track', 'time'), fill_value=np.nan)
@@ -19,18 +20,22 @@ def initialize_netcdf(file_path):
         root_grp.createVariable('surface_area', 'f4', ('track', 'time'), fill_value=np.nan)
         root_grp.createVariable('ql_flux', 'f4', ('track', 'time'), fill_value=np.nan)
         root_grp.createVariable('mass_flux', 'f4', ('track', 'time'), fill_value=np.nan)
+        root_grp.createVariable('mass_flux_per_level', 'f4', ('track', 'time', 'level'), fill_value=np.nan)
         root_grp.createVariable('location_x', 'f4', ('track', 'time'), fill_value=np.nan)
         root_grp.createVariable('location_y', 'f4', ('track', 'time'), fill_value=np.nan)
         root_grp.createVariable('location_z', 'f4', ('track', 'time'), fill_value=np.nan)
         root_grp.createVariable('cloud_points', 'f4', ('track', 'time', 'point', 'coordinate'), fill_value=np.nan)
 
+        height_var = root_grp.createVariable('height', 'f4', ('level', ))
+        height_var[:] = zt  # Assign the height values
 
-def write_cloud_tracks_to_netcdf(tracks, file_path, timestep):
+
+def write_cloud_tracks_to_netcdf(tracks, file_path, timestep, zt):
     """Write cloud tracking data to a NetCDF file for a given timestep."""
 
     # Create the file. Warning: This will overwrite the file if it already exists.
     if not os.path.exists(file_path):
-        initialize_netcdf(file_path)
+        initialize_netcdf(file_path, zt)
 
     # Write data for active clouds at this timestep
     with Dataset(file_path, 'a') as root_grp:
@@ -42,6 +47,7 @@ def write_cloud_tracks_to_netcdf(tracks, file_path, timestep):
         max_w_cloud_base_var = root_grp.variables['max_w_cloud_base']
         ql_flux_var = root_grp.variables['ql_flux']
         mass_flux_var = root_grp.variables['mass_flux']
+        mass_flux_per_level_var = root_grp.variables['mass_flux_per_level']
         loc_x_var = root_grp.variables['location_x']
         loc_y_var = root_grp.variables['location_y']
         loc_z_var = root_grp.variables['location_z']
@@ -59,6 +65,7 @@ def write_cloud_tracks_to_netcdf(tracks, file_path, timestep):
                 max_w_cloud_base_var[i, timestep] = cloud.max_w_cloud_base
                 ql_flux_var[i, timestep] = cloud.ql_flux
                 mass_flux_var[i, timestep] = cloud.mass_flux
+                mass_flux_per_level_var[i, timestep, :] = cloud.mass_flux_per_level
                 cloud_base_area_var[i, timestep] = cloud.cloud_base_area
                 surface_area_var[i, timestep] = cloud.surface_area
                 loc_x_var[i, timestep], loc_y_var[i, timestep], loc_z_var[i, timestep] = cloud.location
@@ -72,6 +79,7 @@ def write_cloud_tracks_to_netcdf(tracks, file_path, timestep):
                 max_w_cloud_base_var[i, timestep:] = np.nan
                 ql_flux_var[i, timestep:] = np.nan
                 mass_flux_var[i, timestep:] = np.nan
+                mass_flux_per_level_var[i, timestep:, :] = np.nan
                 cloud_base_area_var[i, timestep:] = np.nan
                 surface_area_var[i, timestep:] = np.nan
                 loc_x_var[i, timestep:] = np.nan

@@ -149,9 +149,8 @@ class CloudField:
         clouds = {} # dictionary to store cloud objects
         for region in regions: # iterate over all regions
             if region.area >= config['min_size']: # only consider regions larger than min_size
-                # print (f"Processing cloud {region.label}...")
-
                 cloud_id = f"{self.timestep}-{region.label}" # unique id for the cloud
+               # print (f" Processing cloud: {cloud_id}")
                 cloud_mask = updated_labeled_array == region.label # mask for the current region
                 point_indices = np.argwhere(cloud_mask) # indices of points in the region
                 points = [(xt[x], yt[y], zt[z]) for z, y, x in point_indices] # coordinates of points in the region
@@ -210,8 +209,10 @@ class CloudField:
 
                 # --------------------------------------------------------------------------------------------
                 # calculate mass flux
-                mass_flux_per_level = {}
+                #mass_flux_per_level = {}
+                mass_flux_per_level = np.full(len(zt), np.nan)
                 for (z, y, x) in point_indices:
+                    idx = np.argwhere(zt == zt[z])[0]  # Find the index of the z coordinate in the zt array
                     z_coord = zt[z]
                     w = w_data[z, y, x]
                     p = p_data[z, y, x]
@@ -224,16 +225,17 @@ class CloudField:
                     rho = calculate_density(T, p, q_l, q_v)
 
                     temp_mass_flux = w * rho * config['horizontal_resolution']**2
+                    mass_flux_per_level[idx] = temp_mass_flux
                     #print (f"Mass flux at point {z, y, x}: {mass_flux}")
-                    if z_coord in mass_flux_per_level:
-                        mass_flux_per_level[z_coord] += temp_mass_flux
-                    else:
-                        mass_flux_per_level[z_coord] = temp_mass_flux
+                    #if z_coord in mass_flux_per_level:
+                    #    mass_flux_per_level[z_coord] += temp_mass_flux
+                    #else:
+                    #    mass_flux_per_level[z_coord] = temp_mass_flux
 
-                # print shape of mass_flux_per_level
-                #print(f"Shape of mass_flux_per_level: {mass_flux_per_level}")
-                mass_flux = sum(mass_flux_per_level.values())
-                print (f"Mass flux from levels: {mass_flux}")
+                #mass_flux = sum(mass_flux_per_level.values())
+                # print (f"Mass flux per level: {mass_flux_per_level}")
+                mass_flux = np.nansum(mass_flux_per_level)
+                #print (f"Total mass flux: {mass_flux}")
                 # --------------------------------------------------------------------------------------------
 
 
@@ -251,6 +253,7 @@ class CloudField:
                     cloud_base_area=cloud_base_area,
                     ql_flux = ql_flux,
                     mass_flux = mass_flux,
+                    mass_flux_per_level = mass_flux_per_level,
                     timestep=self.timestep
                 )
         print(f"Cloud data for {len(clouds)} objects.")
