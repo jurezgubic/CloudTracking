@@ -177,46 +177,64 @@ class CloudField:
                 # calculate ql flux
                 ql_flux = sum(w_data[z, y, x] * l_data[z, y, x] for z, y, x in point_indices)
 
-
                 # --------------------------------------------------------------------------------------------
+                # this section is redundant at the moment
                 # extract values of p, theta_l and q_t at cloud points
                 p_values = [p_data[z, y, x] for z, y, x in point_indices]
                 theta_l_values = [theta_l_data[z, y, x] for z, y, x in point_indices]
                 q_t_values = [q_t_data[z, y, x]/1000 for z, y, x in point_indices] # convert from g/kg to kg/kg
                 q_l_values  = [l_data[z, y, x]/1000 for z, y, x in point_indices] # convert from g/kg to kg/kg
                 q_v_values = [q_t - l for q_t, l in zip(q_t_values, q_l_values)]
+                #shape of something_data is (160, 512, 512). Shape of something_values is (2596,)
 
 
-                #shape of something_data is (160, 512, 512)
-                # shape of something_values is (2596,)
 
-                # calculate temperature
-                def calculate_temperature(theta_l_points, p_points, q_t_points, l_points, q_v_points):
-                    """Calculate temperature from theta_l, pressure, total water and water vapour mixing ratios."""
-                    # Element-wise operations for kappa and T
-                    kappa_points = [(const.R_d / const.c_pd) * ((1 + q_v / const.epsilon) / (1 + q_v * (const.c_pv / const.c_pd))) for q_v in q_v_points]
-                    T_points = [theta_l * (const.c_pd / (const.c_pd - const.L_v * q_l)) * (const.p_0 / p) ** (-kappa) for theta_l, q_l, p, kappa in zip(theta_l_points, l_points, p_points, kappa_points)]
-                    return T_points
-
-                T_values = calculate_temperature(theta_l_values, p_values, q_t_values, q_l_values, q_v_values)
-
-                def calculate_density(T_points, p_points, q_l_points, q_v_points):
-                    """Calculate air density from temperature, pressure and liquid water mixing ratio."""
-                    p_v_points = [(q_v / (q_v + const.epsilon)) * p for q_v, p in zip(q_v_points, p_points)]
-                    rho_points = [(p - p_v) / (const.R_d * T) + (p_v / (const.R_v * T)) + (q_l * const.rho_l)  for T, p, q_l, q_v, p_v in zip(T_points, p_points, q_l_points, q_v_points, p_v_points)]
-                    return rho_points
-
-                # calculate air density
-                rho_values = calculate_density(T_values, p_values, q_l_values, q_v_values)
-
-
-                # calculate mass flux
-                w_values = [w_data[z, y, x] for z, y, x in point_indices]
-                # mass flux = sum(w * density * horizontal area) for all points in the cloud
-                mass_flux_values = [(w * rho * config['horizontal_resolution']**2) for w, rho in zip(w_values, rho_values)]
-                mass_flux = sum(mass_flux_values)
                 # --------------------------------------------------------------------------------------------
+                # helper functions for calculating mass flux
 
+                def calculate_temperature(theta_l, p, q_t, q_l, q_v):
+                    """Calculate temperature from theta_l, pressure, total water, and water vapor mixing ratios."""
+                    # Calculate kappa for each point
+                    kappa = (const.R_d / const.c_pd) * ((1 + q_v / const.epsilon) / (1 + q_v * (const.c_pv / const.c_pd)))
+                    # Calculate temperature
+                    T = theta_l * (const.c_pd / (const.c_pd - const.L_v * q_l)) * (const.p_0 / p) ** (-kappa)
+                    return T
+
+                def calculate_density(T, p, q_l, q_v):
+                    """Calculate air density from temperature, pressure, and liquid water mixing ratio."""
+                    # Partial pressure of vapor
+                    p_v = (q_v / (q_v + const.epsilon)) * p
+                    # Calculate density
+                    rho = (p - p_v) / (const.R_d * T) + (p_v / (const.R_v * T)) + (q_l * const.rho_l)
+                    return rho
+
+                # --------------------------------------------------------------------------------------------
+                # calculate mass flux
+                mass_flux_per_level = {}
+                for (z, y, x) in point_indices:
+                    z_coord = zt[z]
+                    w = w_data[z, y, x]
+                    p = p_data[z, y, x]
+                    theta_l = theta_l_data[z, y, x]
+                    q_t = q_t_data[z, y, x] / 1000  # Convert from g/kg to kg/kg
+                    q_l = l_data[z, y, x] / 1000      # Convert from g/kg to kg/kg
+                    q_v = q_t - q_l
+
+                    T = calculate_temperature(theta_l, p, q_t, q_l, q_v)
+                    rho = calculate_density(T, p, q_l, q_v)
+
+                    temp_mass_flux = w * rho * config['horizontal_resolution']**2
+                    #print (f"Mass flux at point {z, y, x}: {mass_flux}")
+                    if z_coord in mass_flux_per_level:
+                        mass_flux_per_level[z_coord] += temp_mass_flux
+                    else:
+                        mass_flux_per_level[z_coord] = temp_mass_flux
+
+                # print shape of mass_flux_per_level
+                #print(f"Shape of mass_flux_per_level: {mass_flux_per_level}")
+                mass_flux = sum(mass_flux_per_level.values())
+                print (f"Mass flux from levels: {mass_flux}")
+                # --------------------------------------------------------------------------------------------
 
 
 
