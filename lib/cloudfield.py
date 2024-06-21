@@ -5,11 +5,11 @@ from memory_profiler import profile
 from scipy.ndimage import binary_dilation
 from utils.plotting_utils import plot_labeled_regions
 from lib.cloud import Cloud
-
+import utils.constants as const
 
 class CloudField:
     """Class to identify and track clouds in a labeled data field."""
-    def __init__(self, l_data, w_data,  timestep, config, xt, yt, zt):
+    def __init__(self, l_data, w_data, p_data, theta_l_data, q_t_data, timestep, config, xt, yt, zt):
         self.timestep = timestep
         self.distance_threshold = config['distance_threshold']
         self.xt = xt
@@ -30,7 +30,7 @@ class CloudField:
 
         # create cloud data from updated labeled array
         self.clouds = self.create_clouds_from_labeled_array(
-            updated_labeled_array, l_data, w_data, config, xt, yt, zt)
+            updated_labeled_array, l_data, w_data, p_data, theta_l_data, q_t_data, config, xt, yt, zt)
 
         # plot the updated labeled clouds if plot_switch is True
         if config['plot_switch'] == True:
@@ -41,6 +41,8 @@ class CloudField:
             #'name_or_array', labeled_array, timestep=timestep, plot_all_levels=False, specific_level=50)
         # plot_labeled_regions(
             #'name_of_array', labeled_array, timestep=timestep, plot_all_levels=True) #plots all levels
+
+
 
 
 
@@ -134,7 +136,7 @@ class CloudField:
         return labeled_array
 
     # @profile
-    def create_clouds_from_labeled_array(self, updated_labeled_array, l_data, w_data, config, xt, yt, zt):
+    def create_clouds_from_labeled_array(self, updated_labeled_array, l_data, w_data, p_data, theta_l_data, q_t_data, config, xt, yt, zt):
         """Create Cloud objects from the updated labeled array."""
         print ("Creating cloud data from labeled array...")
 
@@ -148,9 +150,8 @@ class CloudField:
         clouds = {} # dictionary to store cloud objects
         for region in regions: # iterate over all regions
             if region.area >= config['min_size']: # only consider regions larger than min_size
-                # print (f"Processing cloud {region.label}...")
-
                 cloud_id = f"{self.timestep}-{region.label}" # unique id for the cloud
+               # print (f" Processing cloud: {cloud_id}")
                 cloud_mask = updated_labeled_array == region.label # mask for the current region
                 point_indices = np.argwhere(cloud_mask) # indices of points in the region
                 points = [(xt[x], yt[y], zt[z]) for z, y, x in point_indices] # coordinates of points in the region
@@ -173,8 +174,72 @@ class CloudField:
                 surface_mask = binary_dilation(cloud_mask) & ~cloud_mask
                 surface_area = np.sum(surface_mask)
 
+                # calculate ql flux
+                ql_flux = sum(w_data[z, y, x] * l_data[z, y, x] for z, y, x in point_indices)
+
+                # --------------------------------------------------------------------------------------------
+                # this section is redundant at the moment
+                # extract values of p, theta_l and q_t at cloud points
+                p_values = [p_data[z, y, x] for z, y, x in point_indices]
+                theta_l_values = [theta_l_data[z, y, x] for z, y, x in point_indices]
+                q_t_values = [q_t_data[z, y, x]/1000 for z, y, x in point_indices] # convert from g/kg to kg/kg
+                q_l_values  = [l_data[z, y, x]/1000 for z, y, x in point_indices] # convert from g/kg to kg/kg
+                q_v_values = [q_t - l for q_t, l in zip(q_t_values, q_l_values)]
+                #shape of something_data is (160, 512, 512). Shape of something_values is (2596,)
+
+
+
+                # --------------------------------------------------------------------------------------------
+                # helper functions for calculating mass flux
+
+                def calculate_temperature(theta_l, p, q_t, q_l, q_v):
+                    """Calculate temperature from theta_l, pressure, total water, and water vapor mixing ratios."""
+                    # Calculate kappa for each point
+                    kappa = (const.R_d / const.c_pd) * ((1 + q_v / const.epsilon) / (1 + q_v * (const.c_pv / const.c_pd)))
+                    # Calculate temperature
+                    T = theta_l * (const.c_pd / (const.c_pd - const.L_v * q_l)) * (const.p_0 / p) ** (-kappa)
+                    return T
+
+                def calculate_density(T, p, q_l, q_v):
+                    """Calculate air density from temperature, pressure, and liquid water mixing ratio."""
+                    # Partial pressure of vapor
+                    p_v = (q_v / (q_v + const.epsilon)) * p
+                    # Calculate density
+                    rho = (p - p_v) / (const.R_d * T) + (p_v / (const.R_v * T)) + (q_l * const.rho_l)
+                    return rho
+
+                # --------------------------------------------------------------------------------------------
                 # calculate mass flux
-                mass_flux = sum(w_data[z, y, x] * l_data[z, y, x] for z, y, x in point_indices)
+                #mass_flux_per_level = {}
+                mass_flux_per_level = np.full(len(zt), np.nan)
+                for (z, y, x) in point_indices:
+                    idx = np.argwhere(zt == zt[z])[0]  # Find the index of the z coordinate in the zt array
+                    z_coord = zt[z]
+                    w = w_data[z, y, x]
+                    p = p_data[z, y, x]
+                    theta_l = theta_l_data[z, y, x]
+                    q_t = q_t_data[z, y, x] / 1000  # Convert from g/kg to kg/kg
+                    q_l = l_data[z, y, x] / 1000      # Convert from g/kg to kg/kg
+                    q_v = q_t - q_l
+
+                    T = calculate_temperature(theta_l, p, q_t, q_l, q_v)
+                    rho = calculate_density(T, p, q_l, q_v)
+
+                    temp_mass_flux = w * rho * config['horizontal_resolution']**2
+                    mass_flux_per_level[idx] = temp_mass_flux
+                    #print (f"Mass flux at point {z, y, x}: {mass_flux}")
+                    #if z_coord in mass_flux_per_level:
+                    #    mass_flux_per_level[z_coord] += temp_mass_flux
+                    #else:
+                    #    mass_flux_per_level[z_coord] = temp_mass_flux
+
+                #mass_flux = sum(mass_flux_per_level.values())
+                # print (f"Mass flux per level: {mass_flux_per_level}")
+                mass_flux = np.nansum(mass_flux_per_level)
+                #print (f"Total mass flux: {mass_flux}")
+                # --------------------------------------------------------------------------------------------
+
+
 
                 # Create a Cloud object and store it in the dictionary
                 clouds[cloud_id] = Cloud(
@@ -187,7 +252,9 @@ class CloudField:
                     max_w=max_w,
                     max_w_cloud_base=max_w_cloud_base,
                     cloud_base_area=cloud_base_area,
+                    ql_flux = ql_flux,
                     mass_flux = mass_flux,
+                    mass_flux_per_level = mass_flux_per_level,
                     timestep=self.timestep
                 )
         print(f"Cloud data for {len(clouds)} objects.")

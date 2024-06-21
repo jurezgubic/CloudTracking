@@ -6,6 +6,9 @@ __pycache__/
 # netcdf files
 *.nc
 
+# pdf files
+*.pdf
+
 # macOS
 .DS_Store
 

@@ -15,20 +15,23 @@ file_name = {
     'l': 'rico.l.nc',
     'u': 'rico.u.nc',
     'v': 'rico.v.nc',
-    'w': 'rico.w.nc'
+    'w': 'rico.w.nc',
+    'p': 'rico.p.nc',
+    't': 'rico.t.nc',
+    'q': 'rico.q.nc',
 }
 
 # Set output file path
 output_netcdf_path = 'cloud_results.nc'
 
 # Set number of timesteps to process
-total_timesteps = 5
+total_timesteps = 4
 
 # Set configuration parameters
 config = {
-    'min_size': 50,  # Minimum size of cloud objects to be considered
-    'l_condition': 0.001, # Minimum threshold for liquid water
-    'w_condition': 0.0,  # Minimum condition for vertical velocity
+    'min_size': 10,  # Minimum size of cloud objects to be considered
+    'l_condition': 0.0005, # kg/kg. Minimum threshold for liquid water
+    'w_condition': 0.0,  # m/s. Minimum condition for vertical velocity
     'w_switch': True,  # True if you want to use vertical velocity threshold
     'timestep_duration': 60,  # Duration between timesteps in seconds
     'distance_threshold': 3, # Max dist between merging clouds across boundary
@@ -59,7 +62,8 @@ def process_clouds(cloud_tracker):
         cloud_tracker.update_tracks(cloud_field, mean_u, mean_v, cloud_field.zt)
 
         # Write cloud track information to netCDF
-        write_cloud_tracks_to_netcdf(cloud_tracker.get_tracks(), output_netcdf_path, timestep)
+        zt = cloud_field.zt
+        write_cloud_tracks_to_netcdf(cloud_tracker.get_tracks(), output_netcdf_path, timestep, zt)
 
          # Force garbage collection to avoid memory issues
         gc.collect()
