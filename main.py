@@ -25,12 +25,12 @@ file_name = {
 output_netcdf_path = 'cloud_results.nc'
 
 # Set number of timesteps to process
-total_timesteps = 8
+total_timesteps = 4
 
 # Set configuration parameters
 config = {
     'min_size': 10,  # Minimum size of cloud objects to be considered
-    'l_condition': 0.00001, # kg/kg. Minimum threshold for liquid water
+    'l_condition': 0.0005, # kg/kg. Minimum threshold for liquid water
     'w_condition': 0.0,  # m/s. Minimum condition for vertical velocity
     'w_switch': True,  # True if you want to use vertical velocity threshold
     'timestep_duration': 60,  # Duration between timesteps in seconds

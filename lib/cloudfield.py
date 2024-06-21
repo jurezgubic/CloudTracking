@@ -45,6 +45,7 @@ class CloudField:
 
 
 
+
     def identify_regions(self, l_data, w_data, config):
         """Identify cloudy regions in the labeled data."""
         if config['w_switch'] == True:
