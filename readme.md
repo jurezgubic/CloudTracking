@@ -21,7 +21,8 @@ See [Output Analysis Notebook](analysis/output_analysis.ipynb) for example usage
 4. **cloudfield.py**: Identifies cloud objects in the loaded dataset
 5. **cloudtracker.py**: Tracks and analyses temporal changes of clouds in cloudield.
 6. **netcdf_writer.py**: Writes data to NetCDF files. 
-7. **output_analysis.ipynb**: Basic analysis for RICO run. 
+7. **output_analysis_general.ipynb**: Basic analysis for RICO run.
+8. **output_analysis_vertical_profiles.ipynb**: Analysis of vertical profiles. 
 
 
 ## How to use
