@@ -1,3 +1,5 @@
+import argparse
+import os
 from memory_profiler import profile
 import gc, time
 from src.data_management import load_cloud_field_from_file, calculate_mean_velocities
@@ -25,12 +27,13 @@ file_name = {
 output_netcdf_path = 'cloud_results.nc'
 
 # Set number of timesteps to process
-total_timesteps = 4
+total_timesteps = 3
+
 
 # Set configuration parameters
 config = {
     'min_size': 10,  # Minimum size of cloud objects to be considered
-    'l_condition': 0.0005, # kg/kg. Minimum threshold for liquid water
+    'l_condition': 0.001, # kg/kg. Minimum threshold for liquid water
     'w_condition': 0.0,  # m/s. Minimum condition for vertical velocity
     'w_switch': True,  # True if you want to use vertical velocity threshold
     'timestep_duration': 60,  # Duration between timesteps in seconds
@@ -72,7 +75,12 @@ def process_clouds(cloud_tracker):
     print("Cloud tracking complete.")
 
 
-def main():
+def main(delete_existing_file):
+    # Delete the existing output file if the option is provided
+    if delete_existing_file and os.path.exists(output_netcdf_path):
+        os.remove(output_netcdf_path)
+        print(f"Deleted existing file: {output_netcdf_path}")
+
     # Initialize CloudTracker
     cloud_tracker = CloudTracker(config)
 
@@ -80,7 +88,12 @@ def main():
     process_clouds(cloud_tracker)
 
 if __name__ == "__main__":
-    main()
+    # Parse command line arguments
+    parser = argparse.ArgumentParser(description="Cloud tracking script.")
+    parser.add_argument('--delete', action='store_true', help="Delete the existing output netcdf file before running the script.")
+    args = parser.parse_args()
+
+    main(args.delete)
 
 
 ## set proper output file path (placeholder for later)
