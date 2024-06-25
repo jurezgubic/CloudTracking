@@ -1,7 +1,5 @@
-import argparse
-import os
+import argparse, os, gc, time
 from memory_profiler import profile
-import gc, time
 from src.data_management import load_cloud_field_from_file, calculate_mean_velocities
 from src.netcdf_writer import write_cloud_tracks_to_netcdf
 from lib.cloudtracker import CloudTracker
@@ -28,7 +26,6 @@ output_netcdf_path = 'cloud_results.nc'
 
 # Set number of timesteps to process
 total_timesteps = 3
-
 
 # Set configuration parameters
 config = {

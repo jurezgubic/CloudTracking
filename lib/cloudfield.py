@@ -212,6 +212,8 @@ class CloudField:
                 # calculate mass flux
                 #mass_flux_per_level = {}
                 mass_flux_per_level = np.full(len(zt), np.nan)
+                temp_per_level = np.full(len(zt), np.nan)
+
                 for (z, y, x) in point_indices:
                     idx = np.argwhere(zt == zt[z])[0]  # Find the index of the z coordinate in the zt array
                     z_coord = zt[z]
@@ -226,12 +228,27 @@ class CloudField:
                     rho = calculate_density(T, p, q_l, q_v)
 
                     temp_mass_flux = w * rho * config['horizontal_resolution']**2
-                    mass_flux_per_level[idx] = temp_mass_flux
+                    mass_flux_per_level[idx] = temp_mass_flux # store mass flux at each level
+                    temp_per_level[idx] = T # store temperature at each level
+                    w_per_level = w_data[z, y, x] # store vertical velocity at each level
+
                     #print (f"Mass flux at point {z, y, x}: {mass_flux}")
                     #if z_coord in mass_flux_per_level:
                     #    mass_flux_per_level[z_coord] += temp_mass_flux
                     #else:
                     #    mass_flux_per_level[z_coord] = temp_mass_flux
+
+                # Calculate temperature outside the cloud
+                temp_outside_per_level = np.full(len(zt), np.nan)
+                total_mask = np.ones_like(updated_labeled_array, dtype=bool)
+                total_mask[updated_labeled_array > 0] = False  # Mask out the cloud regions
+
+                for z in range(len(zt)):
+                    outside_temp_values = theta_l_data[z][total_mask[z]]
+                    if len(outside_temp_values) > 0:
+                        temp_outside_per_level[z] = np.mean(outside_temp_values)
+                    else:
+                        temp_outside_per_level[z] = np.nan
 
                 #mass_flux = sum(mass_flux_per_level.values())
                 # print (f"Mass flux per level: {mass_flux_per_level}")
@@ -255,6 +272,9 @@ class CloudField:
                     ql_flux = ql_flux,
                     mass_flux = mass_flux,
                     mass_flux_per_level = mass_flux_per_level,
+                    temp_per_level = temp_per_level,
+                    temp_outside_per_level = temp_outside_per_level,
+                    w_per_level = w_per_level,
                     timestep=self.timestep
                 )
         print(f"Cloud data for {len(clouds)} objects.")
