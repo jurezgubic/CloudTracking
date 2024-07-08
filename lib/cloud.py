@@ -1,6 +1,6 @@
 class Cloud:
     """ Create a cloud object """
-    def __init__(self, cloud_id, size, surface_area, cloud_base_area, location, points, timestep, max_height, max_w, max_w_cloud_base, ql_flux, mass_flux, mass_flux_per_level, is_active=True):
+    def __init__(self, cloud_id, size, surface_area, cloud_base_area, location, points, timestep, max_height, max_w, max_w_cloud_base, ql_flux, mass_flux, mass_flux_per_level, temp_per_level, theta_outside_per_level, w_per_level, is_active=True):
         """ Initialize the cloud object """
         self.cloud_id = cloud_id
         self.size = size
@@ -15,6 +15,9 @@ class Cloud:
         self.ql_flux = ql_flux
         self.mass_flux = mass_flux
         self.mass_flux_per_level = mass_flux_per_level
+        self.temp_per_level = temp_per_level
+        self.theta_outside_per_level = theta_outside_per_level
+        self.w_per_level = w_per_level
         self.is_active = is_active
 
     def update_max_height(self, new_height):

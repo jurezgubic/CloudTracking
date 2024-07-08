@@ -239,16 +239,16 @@ class CloudField:
                     #    mass_flux_per_level[z_coord] = temp_mass_flux
 
                 # Calculate temperature outside the cloud
-                temp_outside_per_level = np.full(len(zt), np.nan)
+                theta_outside_per_level = np.full(len(zt), np.nan)
                 total_mask = np.ones_like(updated_labeled_array, dtype=bool)
                 total_mask[updated_labeled_array > 0] = False  # Mask out the cloud regions
 
                 for z in range(len(zt)):
                     outside_temp_values = theta_l_data[z][total_mask[z]]
                     if len(outside_temp_values) > 0:
-                        temp_outside_per_level[z] = np.mean(outside_temp_values)
+                        theta_outside_per_level[z] = np.mean(outside_temp_values)
                     else:
-                        temp_outside_per_level[z] = np.nan
+                        theta_outside_per_level[z] = np.nan
 
                 #mass_flux = sum(mass_flux_per_level.values())
                 # print (f"Mass flux per level: {mass_flux_per_level}")
@@ -273,7 +273,7 @@ class CloudField:
                     mass_flux = mass_flux,
                     mass_flux_per_level = mass_flux_per_level,
                     temp_per_level = temp_per_level,
-                    temp_outside_per_level = temp_outside_per_level,
+                    theta_outside_per_level = theta_outside_per_level,
                     w_per_level = w_per_level,
                     timestep=self.timestep
                 )

@@ -22,7 +22,7 @@ def initialize_netcdf(file_path, zt):
         root_grp.createVariable('mass_flux', 'f4', ('track', 'time'), fill_value=np.nan)
         root_grp.createVariable('mass_flux_per_level', 'f4', ('track', 'time', 'level'), fill_value=np.nan)
         root_grp.createVariable('temp_per_level', 'f4', ('track', 'time', 'level'), fill_value=np.nan)
-        root_grp.createVariable('temp_outside_per_level', 'f4', ('track', 'time', 'level'), fill_value=np.nan)
+        root_grp.createVariable('theta_outside_per_level', 'f4', ('track', 'time', 'level'), fill_value=np.nan)
         root_grp.createVariable('w_per_level', 'f4', ('track', 'time', 'level'), fill_value=np.nan)
         root_grp.createVariable('location_x', 'f4', ('track', 'time'), fill_value=np.nan)
         root_grp.createVariable('location_y', 'f4', ('track', 'time'), fill_value=np.nan)
@@ -52,7 +52,7 @@ def write_cloud_tracks_to_netcdf(tracks, file_path, timestep, zt):
         mass_flux_var = root_grp.variables['mass_flux']
         mass_flux_per_level_var = root_grp.variables['mass_flux_per_level']
         temp_per_level_var = root_grp.variables['temp_per_level']
-        temp_outside_per_level_var = root_grp.variables['temp_outside_per_level']
+        theta_outside_per_level_var = root_grp.variables['theta_outside_per_level']
         w_per_level_var = root_grp.variables['w_per_level']
         loc_x_var = root_grp.variables['location_x']
         loc_y_var = root_grp.variables['location_y']
@@ -73,7 +73,7 @@ def write_cloud_tracks_to_netcdf(tracks, file_path, timestep, zt):
                 mass_flux_var[i, timestep] = cloud.mass_flux
                 mass_flux_per_level_var[i, timestep, :] = cloud.mass_flux_per_level
                 temp_per_level_var[i, timestep, :] = cloud.temp_per_level
-                temp_outside_per_level_var[i, timestep, :] = cloud.temp_outside_per_level
+                theta_outside_per_level_var[i, timestep, :] = cloud.theta_outside_per_level
                 w_per_level_var[i, timestep, :] = cloud.w_per_level
                 cloud_base_area_var[i, timestep] = cloud.cloud_base_area
                 surface_area_var[i, timestep] = cloud.surface_area
@@ -90,7 +90,7 @@ def write_cloud_tracks_to_netcdf(tracks, file_path, timestep, zt):
                 mass_flux_var[i, timestep:] = np.nan
                 mass_flux_per_level_var[i, timestep:, :] = np.nan
                 temp_per_level_var[i, timestep:, :] = np.nan
-                temp_outside_per_level_var[i, timestep:, :] = np.nan
+                theta_outside_per_level_var[i, timestep:, :] = np.nan
                 w_per_level_var[i, timestep:, :] = np.nan
                 cloud_base_area_var[i, timestep:] = np.nan
                 surface_area_var[i, timestep:] = np.nan
