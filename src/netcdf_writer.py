@@ -24,6 +24,8 @@ def initialize_netcdf(file_path, zt):
         root_grp.createVariable('temp_per_level', 'f4', ('track', 'time', 'level'), fill_value=np.nan)
         root_grp.createVariable('theta_outside_per_level', 'f4', ('track', 'time', 'level'), fill_value=np.nan)
         root_grp.createVariable('w_per_level', 'f4', ('track', 'time', 'level'), fill_value=np.nan)
+        root_grp.createVariable('circum_per_level', 'f4', ('track', 'time', 'level'), fill_value=np.nan)
+        root_grp.createVariable('eff_radius_per_level', 'f4', ('track', 'time', 'level'), fill_value=np.nan)
         root_grp.createVariable('location_x', 'f4', ('track', 'time'), fill_value=np.nan)
         root_grp.createVariable('location_y', 'f4', ('track', 'time'), fill_value=np.nan)
         root_grp.createVariable('location_z', 'f4', ('track', 'time'), fill_value=np.nan)
@@ -54,6 +56,8 @@ def write_cloud_tracks_to_netcdf(tracks, file_path, timestep, zt):
         temp_per_level_var = root_grp.variables['temp_per_level']
         theta_outside_per_level_var = root_grp.variables['theta_outside_per_level']
         w_per_level_var = root_grp.variables['w_per_level']
+        circum_per_level_var = root_grp.variables['circum_per_level']
+        eff_radius_per_level_var = root_grp.variables['eff_radius_per_level']
         loc_x_var = root_grp.variables['location_x']
         loc_y_var = root_grp.variables['location_y']
         loc_z_var = root_grp.variables['location_z']
@@ -75,6 +79,8 @@ def write_cloud_tracks_to_netcdf(tracks, file_path, timestep, zt):
                 temp_per_level_var[i, timestep, :] = cloud.temp_per_level
                 theta_outside_per_level_var[i, timestep, :] = cloud.theta_outside_per_level
                 w_per_level_var[i, timestep, :] = cloud.w_per_level
+                circum_per_level_var[i, timestep, :] = cloud.circum_per_level
+                eff_radius_per_level_var[i, timestep, :] = cloud.eff_radius_per_level
                 cloud_base_area_var[i, timestep] = cloud.cloud_base_area
                 surface_area_var[i, timestep] = cloud.surface_area
                 loc_x_var[i, timestep], loc_y_var[i, timestep], loc_z_var[i, timestep] = cloud.location
@@ -92,6 +98,8 @@ def write_cloud_tracks_to_netcdf(tracks, file_path, timestep, zt):
                 temp_per_level_var[i, timestep:, :] = np.nan
                 theta_outside_per_level_var[i, timestep:, :] = np.nan
                 w_per_level_var[i, timestep:, :] = np.nan
+                circum_per_level_var[i, timestep:, :] = np.nan
+                eff_radius_per_level_var[i, timestep:, :] = np.nan
                 cloud_base_area_var[i, timestep:] = np.nan
                 surface_area_var[i, timestep:] = np.nan
                 loc_x_var[i, timestep:] = np.nan

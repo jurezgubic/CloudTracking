@@ -1,6 +1,6 @@
-from skimage import measure
 import numpy as np
 import gc
+from skimage import measure
 from memory_profiler import profile
 from scipy.ndimage import binary_dilation
 from utils.plotting_utils import plot_labeled_regions
@@ -209,10 +209,13 @@ class CloudField:
                     return rho
 
                 # --------------------------------------------------------------------------------------------
-                # calculate mass flux
+                # initiate variables to store vertical paramaters
                 #mass_flux_per_level = {}
                 mass_flux_per_level = np.full(len(zt), np.nan)
                 temp_per_level = np.full(len(zt), np.nan)
+                w_per_level = np.full(len(zt), np.nan)
+                circum_per_level = np.full(len(zt), np.nan)
+                eff_radius_per_level = np.full(len(zt), np.nan)
 
                 for (z, y, x) in point_indices:
                     idx = np.argwhere(zt == zt[z])[0]  # Find the index of the z coordinate in the zt array
@@ -230,13 +233,23 @@ class CloudField:
                     temp_mass_flux = w * rho * config['horizontal_resolution']**2
                     mass_flux_per_level[idx] = temp_mass_flux # store mass flux at each level
                     temp_per_level[idx] = T # store temperature at each level
-                    w_per_level = w_data[z, y, x] # store vertical velocity at each level
+                    w_per_level[idx] = w_data[z, y, x] # store vertical velocity at each level
 
-                    #print (f"Mass flux at point {z, y, x}: {mass_flux}")
-                    #if z_coord in mass_flux_per_level:
-                    #    mass_flux_per_level[z_coord] += temp_mass_flux
-                    #else:
-                    #    mass_flux_per_level[z_coord] = temp_mass_flux
+
+
+                # Calculate circumference and effective radius at each level
+                for z in range(len(zt)):
+                    cloud_slice = updated_labeled_array[z, :, :] == region.label
+                    if np.any(cloud_slice):
+                        # Calculate perimeter of the cloud at this level
+                        perimeter = measure.perimeter(cloud_slice, neighborhood=8)
+                        circum_per_level[z] = perimeter * config['horizontal_resolution']
+
+                        # Calculate the effective radius
+                        area = np.sum(cloud_slice) * config['horizontal_resolution']**2
+                        circle_circumference = 2 * np.pi * np.sqrt(area / np.pi)
+                        eff_radius_per_level[z] = circum_per_level[z] / circle_circumference
+
 
                 # Calculate temperature outside the cloud
                 theta_outside_per_level = np.full(len(zt), np.nan)
@@ -275,6 +288,8 @@ class CloudField:
                     temp_per_level = temp_per_level,
                     theta_outside_per_level = theta_outside_per_level,
                     w_per_level = w_per_level,
+                    circum_per_level = circum_per_level,
+                    eff_radius_per_level = eff_radius_per_level,
                     timestep=self.timestep
                 )
         print(f"Cloud data for {len(clouds)} objects.")
