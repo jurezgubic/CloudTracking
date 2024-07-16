@@ -44,6 +44,7 @@ class CloudTracker:
 
         if not self.cloud_tracks:  # If this is the first timestep
             for cloud_id, cloud in current_cloud_field.clouds.items(): # Add all clouds as new tracks
+                cloud.age = 0 # initialise cloud age
                 self.cloud_tracks[cloud_id] = [cloud] # Add the cloud as a new track
         else:
             # check each existing track for a match in the current cloud field
@@ -57,6 +58,7 @@ class CloudTracker:
                         current_max_height = max(z for _, _, z in cloud.points) # Update the max height of the cloud
                         if current_max_height > last_cloud_in_track.max_height: # If the current cloud is higher
                             last_cloud_in_track.max_height = current_max_height # Update the max height of the cloud
+                        cloud.age = last_cloud_in_track.age + 1 # increment the age of the cloud
                         track.append(cloud) # Add the cloud to the track
                         new_matched_clouds.add(cloud_id) # Mark the cloud as matched
                         found_match = True
@@ -69,6 +71,7 @@ class CloudTracker:
             # Add new clouds as new tracks
             for cloud_id, cloud in current_cloud_field.clouds.items(): # Add all unmatched clouds as new tracks
                 if cloud_id not in new_matched_clouds: # If the cloud is not matched
+                    cloud.age = 0 # initialise cloud age to 0
                     self.cloud_tracks[cloud_id] = [cloud] # Add the cloud as a new track
 
 
