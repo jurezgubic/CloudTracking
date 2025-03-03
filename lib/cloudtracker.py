@@ -50,6 +50,10 @@ class CloudTracker:
             # check each existing track for a match in the current cloud field
             for track_id, track in list(self.cloud_tracks.items()):
                 last_cloud_in_track = track[-1]
+                # Skip inactive tracks
+                if not last_cloud_in_track.is_active:
+                    continue
+
                 found_match = False
 
                 for cloud_id, cloud in current_cloud_field.clouds.items(): # Check if the cloud is a match
@@ -97,10 +101,11 @@ class CloudTracker:
 
     # @profile
     def is_match(self, cloud, last_cloud_in_track):
-        """ Check if the cloud is a match to the last cloud in the track.
-        This is done by checking if any point in the current cloud is within the
-        horizontal resolution of the last cloud in the track. """
-
+        """ Check if the cloud is a match to the last cloud in the track. """
+        # First, check if the last cloud is still active
+        if not last_cloud_in_track.is_active:
+            return False
+        
         dx, dy = self.drift_translation_calculation() # Drift calculation per timestep
 
         # Calculate the threshold for horizontal resolution
