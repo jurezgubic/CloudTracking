@@ -12,6 +12,10 @@ def initialize_netcdf(file_path, zt):
         root_grp.createDimension('coordinate', 3)  # Static dimension for 3D coordinates
         root_grp.createDimension('level', len(zt))  # Using consistent height levels
 
+        # Flag for whether a track is fully valid or not
+        valid_track_var = root_grp.createVariable('valid_track', 'i4', ('track',))
+        valid_track_var[:] = 1  # Default all to valid
+
         root_grp.createVariable('size', 'f4', ('track', 'time'), fill_value=np.nan)
         root_grp.createVariable('max_height', 'f4', ('track', 'time'), fill_value=np.nan)
         root_grp.createVariable('cloud_base_area', 'f4', ('track', 'time'), fill_value=np.nan)
@@ -64,6 +68,7 @@ def write_cloud_tracks_to_netcdf(tracks, file_path, timestep, zt):
         loc_z_var = root_grp.variables['location_z']
         cloud_points_var = root_grp.variables['cloud_points']
         age_var = root_grp.variables['age']
+        valid_track_var = root_grp.variables['valid_track']  # We can reference it if needed
 
         # Write data for active clouds at this timestep
         active_tracks = list(tracks.keys())

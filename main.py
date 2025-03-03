@@ -4,6 +4,7 @@ from src.data_management import load_cloud_field_from_file, calculate_mean_veloc
 from src.netcdf_writer import write_cloud_tracks_to_netcdf
 from lib.cloudtracker import CloudTracker
 import src.data_management as data_management
+from netCDF4 import Dataset  # Needed for finalizing
 
 # Warning: user needs to modify: base_file_path, file_name, output_netcdf_path, total_timesteps and config
 
@@ -25,12 +26,12 @@ file_name = {
 output_netcdf_path = 'cloud_results.nc'
 
 # Set number of timesteps to process
-total_timesteps = 20
+total_timesteps = 10
 
 # Set configuration parameters
 config = {
-    'min_size': 10,  # Minimum size of cloud objects to be considered
-    'l_condition': 0.001, # kg/kg. Minimum threshold for liquid water
+    'min_size': 100,  # Minimum size of cloud objects to be considered
+    'l_condition': 0.0007, # kg/kg. Minimum threshold for liquid water
     'w_condition': 0.0,  # m/s. Minimum condition for vertical velocity
     'w_switch': True,  # True if you want to use vertical velocity threshold
     'timestep_duration': 60,  # Duration between timesteps in seconds
@@ -70,6 +71,34 @@ def process_clouds(cloud_tracker):
         stop = time.time() # Stop timer
         print (f"Time taken: {(stop-start)/60:.1f} minutes")
     print("Cloud tracking complete.")
+
+    # After all timesteps, flag partial-lifetime clouds
+    finalize_partial_lifetime_tracks(cloud_tracker, total_timesteps)
+
+
+def finalize_partial_lifetime_tracks(cloud_tracker, total_timesteps):
+    """Flag partial-lifetime tracks in the NetCDF so they can be ignored in analyses."""
+    partial_ids = []
+    for t_id, track in cloud_tracker.get_tracks().items():
+        if not track:
+            continue
+        t_first = track[0].timestep
+        t_last = track[-1].timestep
+        # Check if it started at the first step or is active at the last step
+        if t_first == 0 or (track[-1].is_active and t_last == total_timesteps - 1):
+            partial_ids.append(t_id)
+
+    if not partial_ids:
+        print("No partial-lifetime tracks found.")
+        return
+
+    print(f"Flagging {len(partial_ids)} partial-lifetime track(s) as invalid...")
+    with Dataset(output_netcdf_path, "r+") as ds:
+        valid_var = ds.variables['valid_track']
+        for i, t_id in enumerate(cloud_tracker.get_tracks().keys()):
+            # If t_id happens to be in partial_ids, set valid_track to 0
+            if t_id in partial_ids:
+                valid_var[i] = 0
 
 
 def main(delete_existing_file):
