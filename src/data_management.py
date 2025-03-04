@@ -33,20 +33,15 @@ def load_cloud_field_from_file(file_path, file_names, timestep, config):
     with Dataset(f"{file_path}{file_names['q']}", 'r') as dataset:
         q_t_data = dataset.variables['q'][timestep, :, :, :]
     
-    # Load 'w' data if vertical velocity condition is enabled
-    if config['w_switch']:
-        with Dataset(f"{file_path}{file_names['w']}", 'r') as dataset:
-            w_data = dataset.variables['w'][timestep, :, :, :]
-    else:
-        w_data = None
+    # Load 'w' data regardless of w_switch (needed for calculations)
+    with Dataset(f"{file_path}{file_names['w']}", 'r') as dataset:
+        w_data = dataset.variables['w'][timestep, :, :, :]
     
     # Create a CloudField object
     cloud_field = CloudField(l_data, w_data, p_data, theta_l_data, q_t_data, timestep, config, xt, yt, zt)
     
     # Explicitly clear variables to help garbage collection
-    del l_data, p_data, theta_l_data, q_t_data
-    if w_data is not None:
-        del w_data
+    del l_data, p_data, theta_l_data, q_t_data, w_data
     
     gc.collect()  # Force garbage collection
     
