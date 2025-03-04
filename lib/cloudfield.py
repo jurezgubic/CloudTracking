@@ -6,6 +6,7 @@ from scipy.ndimage import binary_dilation
 from utils.plotting_utils import plot_labeled_regions
 from lib.cloud import Cloud
 import utils.constants as const
+from utils.physics import calculate_physics_variables  # Import the Numba-accelerated function
 
 class CloudField:
     """Class to identify and track clouds in a labeled data field."""
@@ -137,175 +138,180 @@ class CloudField:
 
     # @profile
     def create_clouds_from_labeled_array(self, updated_labeled_array, l_data, w_data, p_data, theta_l_data, q_t_data, config, xt, yt, zt):
-        """Create Cloud objects from the updated labeled array."""
-        print ("Creating cloud data from labeled array...")
+        """Create Cloud objects from the updated labeled array with optimized performance."""
+        print("Creating cloud data from labeled array...")
 
-        # recalculate the clouds from the updated labeled array
-        regions = measure.regionprops(updated_labeled_array, l_data)
+        # Pre-compute outside temperature for all levels (do this once for all clouds)
+        print("Pre-computing environment data...")
+        n_levels = len(zt)
+        theta_outside_per_level = np.full(n_levels, np.nan)
+        
+        # Areas outside any cloud (do this calculation once)
+        total_mask = updated_labeled_array == 0
+        
+        # Vectorized calculation of outside temperature
+        for z in range(n_levels):
+            level_mask = total_mask[z]
+            if np.any(level_mask):
+                theta_outside_per_level[z] = np.mean(theta_l_data[z][level_mask])
 
-        #find height index of cloud base
+        # Find height index of cloud base
         base_index = np.abs(zt - config['cloud_base_altitude']).argmin()
+        
+        # Precompute height level indices
+        z_to_idx = {z_val: idx for idx, z_val in enumerate(zt)}
+        
+        # Get the regions
+        regions = measure.regionprops(updated_labeled_array, l_data)
+        print(f"Processing {len(regions)} regions...")
+        
+        # Calculate horizontal_resolution_squared once
+        horizontal_resolution_squared = config['horizontal_resolution']**2
+        
+        # Create Cloud objects in batches to manage memory
+        clouds = {}
+        batch_size = 50  # Process 20 clouds at a time
+        
+        for batch_start in range(0, len(regions), batch_size):
+            batch_end = min(batch_start + batch_size, len(regions))
+            batch_regions = regions[batch_start:batch_end]
+            
+            for region_idx, region in enumerate(batch_regions):
+                if region.area >= config['min_size']:
+                    cloud_id = f"{self.timestep}-{region.label}"
+                    
+                    # Print progress every 20 clouds
+                    if (batch_start + region_idx + 1) % 20 == 0:
+                        print(f"Processing cloud {batch_start + region_idx + 1} of {len(regions)}")
+                    
+                    # Get cloud mask and point indices
+                    cloud_mask = updated_labeled_array == region.label
+                    point_indices = np.argwhere(cloud_mask)
+                    
+                    # Skip if no points (shouldn't happen but just in case)
+                    if len(point_indices) == 0:
+                        continue
+                    
+                    # Create points array more efficiently
+                    points = np.column_stack([
+                        xt[point_indices[:, 2]],
+                        yt[point_indices[:, 1]],
+                        zt[point_indices[:, 0]]
+                    ])
+                    points = [tuple(p) for p in points]  # Convert to list of tuples
+                    
+                    # Extract data using vectorized operations
+                    w_values = w_data[point_indices[:, 0], point_indices[:, 1], point_indices[:, 2]]
+                    l_values = l_data[point_indices[:, 0], point_indices[:, 1], point_indices[:, 2]]
+                    p_values = p_data[point_indices[:, 0], point_indices[:, 1], point_indices[:, 2]]
+                    theta_l_values = theta_l_data[point_indices[:, 0], point_indices[:, 1], point_indices[:, 2]]
+                    q_t_values = q_t_data[point_indices[:, 0], point_indices[:, 1], point_indices[:, 2]] / 1000  # g/kg to kg/kg
+                    q_l_values = l_values / 1000  # g/kg to kg/kg
+                    q_v_values = q_t_values - q_l_values
 
-        # Create Cloud objects for each identified cloud
-        clouds = {} # dictionary to store cloud objects
-        for region in regions: # iterate over all regions
-            if region.area >= config['min_size']: # only consider regions larger than min_size
-                cloud_id = f"{self.timestep}-{region.label}" # unique id for the cloud
-               # print (f" Processing cloud: {cloud_id}")
-                cloud_mask = updated_labeled_array == region.label # mask for the current region
-                point_indices = np.argwhere(cloud_mask) # indices of points in the region
-                points = [(xt[x], yt[y], zt[z]) for z, y, x in point_indices] # coordinates of points in the region
-
-                # extract values of w at the points
-                w_values = [w_data[z, y, x] for z, y, x in point_indices]
-                # Calculate vertical velocity variables
-                max_w = np.max(w_values)
-                base_w_values = [w_data[z, y, x] for z, y, x in point_indices if zt[z] == zt[base_index]] # vertical velocity values at cloud base
-                max_w_cloud_base = np.max(base_w_values) if base_w_values else np.nan # max vertical velocity at cloud base
-
-                # estimate area of cloud base
-                base_points = [point for point in points if point[2] == zt[base_index]] # points at cloud base
-                cloud_base_area = len(base_points)*config['horizontal_resolution']**2 # area of cloud base
-
-                # estimate max height of cloud
-                max_height = np.max([point[2] for point in points])
-
-                # Estimate the surface area of the cloud
-                surface_mask = binary_dilation(cloud_mask) & ~cloud_mask
-                surface_area = np.sum(surface_mask)
-
-                # calculate ql flux
-                ql_flux = sum(w_data[z, y, x] * l_data[z, y, x] for z, y, x in point_indices)
-
-                # --------------------------------------------------------------------------------------------
-                # this section is redundant at the moment
-                # extract values of p, theta_l and q_t at cloud points
-                p_values = [p_data[z, y, x] for z, y, x in point_indices]
-                theta_l_values = [theta_l_data[z, y, x] for z, y, x in point_indices]
-                q_t_values = [q_t_data[z, y, x]/1000 for z, y, x in point_indices] # convert from g/kg to kg/kg
-                q_l_values  = [l_data[z, y, x]/1000 for z, y, x in point_indices] # convert from g/kg to kg/kg
-                q_v_values = [q_t - l for q_t, l in zip(q_t_values, q_l_values)]
-                #shape of something_data is (160, 512, 512). Shape of something_values is (2596,)
-
-
-
-                # --------------------------------------------------------------------------------------------
-                # helper functions for calculating mass flux
-
-                def calculate_temperature(theta_l, p, q_t, q_l, q_v):
-                    """Calculate temperature from theta_l, pressure, total water, and water vapor mixing ratios."""
-                    # Calculate kappa for each point
-                    kappa = (const.R_d / const.c_pd) * ((1 + q_v / const.epsilon) / (1 + q_v * (const.c_pv / const.c_pd)))
-                    # Calculate temperature
-                    T = theta_l * (const.c_pd / (const.c_pd - const.L_v * q_l)) * (const.p_0 / p) ** (-kappa)
-                    return T
-
-                def calculate_density(T, p, q_l, q_v):
-                    """Calculate air density from temperature, pressure, and liquid water mixing ratio."""
-                    # Partial pressure of vapor
-                    p_v = (q_v / (q_v + const.epsilon)) * p
-                    # Calculate density
-                    rho = (p - p_v) / (const.R_d * T) + (p_v / (const.R_v * T)) + (q_l * const.rho_l)
-                    return rho
-
-                # --------------------------------------------------------------------------------------------
-                # initiate variables to store vertical paramaters
-                #mass_flux_per_level = {}
-                mass_flux_per_level = np.full(len(zt), np.nan)
-                temp_per_level = np.full(len(zt), np.nan)
-                w_per_level = np.full(len(zt), np.nan)
-                circum_per_level = np.full(len(zt), np.nan)
-                eff_radius_per_level = np.full(len(zt), np.nan)
-
-                for (z, y, x) in point_indices:
-                    idx = np.argwhere(zt == zt[z])[0]  # Find the index of the z coordinate in the zt array
-                    z_coord = zt[z]
-                    w = w_data[z, y, x]
-                    p = p_data[z, y, x]
-                    theta_l = theta_l_data[z, y, x]
-                    q_t = q_t_data[z, y, x] / 1000  # Convert from g/kg to kg/kg
-                    q_l = l_data[z, y, x] / 1000      # Convert from g/kg to kg/kg
-                    q_v = q_t - q_l
-
-                    T = calculate_temperature(theta_l, p, q_t, q_l, q_v)
-                    rho = calculate_density(T, p, q_l, q_v)
-
-                    temp_mass_flux = w * rho * config['horizontal_resolution']**2
-                    mass_flux_per_level[idx] = temp_mass_flux # store mass flux at each level
-                    temp_per_level[idx] = T # store temperature at each level
-                    w_per_level[idx] = w_data[z, y, x] # store vertical velocity at each level
-
-
-
-                # Calculate circumference and effective radius at each level
-                for z in range(len(zt)):
-                    cloud_slice = updated_labeled_array[z, :, :] == region.label
-                    if np.any(cloud_slice):
-                        # Calculate perimeter of the cloud at this level
-                        perimeter = measure.perimeter(cloud_slice, neighborhood=8)
-                        circum_per_level[z] = perimeter * config['horizontal_resolution']
-
-                        # Calculate the effective radius
-                        area = np.sum(cloud_slice) * config['horizontal_resolution']**2
-                        circle_circumference = 2 * np.pi * np.sqrt(area / np.pi)
-                        eff_radius_per_level[z] = circum_per_level[z] / circle_circumference
-
-
-                # Calculate temperature outside the cloud
-                theta_outside_per_level = np.full(len(zt), np.nan)
-                total_mask = np.ones_like(updated_labeled_array, dtype=bool)
-                total_mask[updated_labeled_array > 0] = False  # Mask out the cloud regions
-
-                for z in range(len(zt)):
-                    outside_temp_values = theta_l_data[z][total_mask[z]]
-                    if len(outside_temp_values) > 0:
-                        theta_outside_per_level[z] = np.mean(outside_temp_values)
+                    # Convert any masked arrays to regular arrays (needed for Numba)
+                    if hasattr(p_values, 'filled'):
+                        p_values = p_values.filled(np.nan)
+                    if hasattr(theta_l_values, 'filled'):
+                        theta_l_values = theta_l_values.filled(np.nan)
+                    if hasattr(q_l_values, 'filled'):
+                        q_l_values = q_l_values.filled(np.nan)
+                    if hasattr(q_v_values, 'filled'):
+                        q_v_values = q_v_values.filled(np.nan)
+                    if hasattr(w_values, 'filled'):
+                        w_values = w_values.filled(np.nan)
+                    
+                    # Calculate max_w
+                    max_w = np.max(w_values)
+                    
+                    # Get cloud base information using vectorized operations
+                    base_mask = point_indices[:, 0] == base_index
+                    if np.any(base_mask):
+                        base_w_values = w_values[base_mask]
+                        max_w_cloud_base = np.max(base_w_values)
+                        cloud_base_area = np.sum(base_mask) * horizontal_resolution_squared
                     else:
-                        theta_outside_per_level[z] = np.nan
-
-                #mass_flux = sum(mass_flux_per_level.values())
-                # print (f"Mass flux per level: {mass_flux_per_level}")
-                mass_flux = np.nansum(mass_flux_per_level)
-                #print (f"Total mass flux: {mass_flux}")
-                # --------------------------------------------------------------------------------------------
-
-
-
-                # Create a Cloud object and store it in the dictionary
-                clouds[cloud_id] = Cloud(
-                    cloud_id=cloud_id,
-                    size=region.area,
-                    surface_area=surface_area,
-                    location=(region.centroid[2], region.centroid[1], region.centroid[0]),
-                    points=points,
-                    max_height=max_height,
-                    max_w=max_w,
-                    max_w_cloud_base=max_w_cloud_base,
-                    cloud_base_area=cloud_base_area,
-                    ql_flux = ql_flux,
-                    mass_flux = mass_flux,
-                    mass_flux_per_level = mass_flux_per_level,
-                    temp_per_level = temp_per_level,
-                    theta_outside_per_level = theta_outside_per_level,
-                    w_per_level = w_per_level,
-                    circum_per_level = circum_per_level,
-                    eff_radius_per_level = eff_radius_per_level,
-                    timestep=self.timestep
-                )
+                        max_w_cloud_base = np.nan
+                        cloud_base_area = 0
+                        
+                    # Calculate max height with vectorized operations
+                    max_height = np.max(zt[point_indices[:, 0]])
+                    
+                    # Compute surface area
+                    surface_mask = binary_dilation(cloud_mask) & ~cloud_mask
+                    surface_area = np.sum(surface_mask) * config['horizontal_resolution']**2
+                    
+                    # Calculate ql flux using vectorized operations
+                    ql_flux = np.sum(w_values * l_values)
+                    
+                    # Use Numba to accelerate physics calculations
+                    temps, rhos, mass_fluxes = calculate_physics_variables(
+                        p_values, theta_l_values, q_l_values, q_v_values, 
+                        w_values, horizontal_resolution_squared
+                    )
+                    
+                    # Pre-allocate arrays for per-level data
+                    mass_flux_per_level = np.full(n_levels, np.nan)
+                    temp_per_level = np.full(n_levels, np.nan)
+                    w_per_level = np.full(n_levels, np.nan)
+                    circum_per_level = np.full(n_levels, np.nan)
+                    eff_radius_per_level = np.full(n_levels, np.nan)
+                    
+                    # Get unique z levels and their counts
+                    unique_z_levels, z_level_counts = np.unique(point_indices[:, 0], return_counts=True)
+                    
+                    # Process data by level using vectorized operations
+                    for z_level_idx, count in zip(unique_z_levels, z_level_counts):
+                        # Get points at this level
+                        level_mask = point_indices[:, 0] == z_level_idx
+                        
+                        # Get values for this level
+                        level_w_values = w_values[level_mask]
+                        level_temps = temps[level_mask]
+                        level_mass_fluxes = mass_fluxes[level_mask]
+                        
+                        # Calculate level statistics
+                        w_per_level[z_level_idx] = np.mean(level_w_values)
+                        temp_per_level[z_level_idx] = np.mean(level_temps)
+                        mass_flux_per_level[z_level_idx] = np.sum(level_mass_fluxes)
+                        
+                        # Calculate circumference and effective radius
+                        cloud_slice = updated_labeled_array[z_level_idx, :, :] == region.label
+                        if np.any(cloud_slice):
+                            perimeter = measure.perimeter(cloud_slice, neighborhood=8)
+                            circum_per_level[z_level_idx] = perimeter * config['horizontal_resolution']
+                            
+                            area = np.sum(cloud_slice) * horizontal_resolution_squared
+                            circle_circumference = 2 * np.pi * np.sqrt(area / np.pi)
+                            eff_radius_per_level[z_level_idx] = circum_per_level[z_level_idx] / circle_circumference
+                    
+                    # Calculate total mass flux
+                    mass_flux = np.nansum(mass_flux_per_level)
+                    
+                    # Create a Cloud object and store it
+                    clouds[cloud_id] = Cloud(
+                        cloud_id=cloud_id,
+                        size=region.area,
+                        surface_area=surface_area,
+                        location=(region.centroid[2], region.centroid[1], region.centroid[0]),
+                        points=points,
+                        max_height=max_height,
+                        max_w=max_w,
+                        max_w_cloud_base=max_w_cloud_base,
+                        cloud_base_area=cloud_base_area,
+                        ql_flux=ql_flux,
+                        mass_flux=mass_flux,
+                        mass_flux_per_level=mass_flux_per_level,
+                        temp_per_level=temp_per_level,
+                        theta_outside_per_level=theta_outside_per_level,
+                        w_per_level=w_per_level,
+                        circum_per_level=circum_per_level,
+                        eff_radius_per_level=eff_radius_per_level,
+                        timestep=self.timestep
+                    )
+            
+            # Force garbage collection after each batch
+            gc.collect()
+        
         print(f"Cloud data for {len(clouds)} objects.")
-
-        # print cloud data for debugging purposes if print_cloud_data_switch is True
-        print_cloud_data_switch = False
-        if print_cloud_data_switch == True:
-            # print some of the data that the object cloud has
-            for cloud in clouds:
-                # print a short line to separate the clouds
-                print("-------------------------------------------------------")
-                print(f"cloud id is {clouds[cloud].cloud_id}")
-                print(f"size is {clouds[cloud].size}")
-                print(f"surface area is {clouds[cloud].surface_area}")
-                print(f"location is {clouds[cloud].location}")
-                print(f"timestep is {clouds[cloud].timestep}")
-                print(clouds[cloud].points)
-
         return clouds

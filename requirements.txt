@@ -23,12 +23,14 @@ jupyter_core==5.7.2
 jupyterlab_widgets==3.0.13
 kiwisolver==1.4.5
 lazy_loader==0.4
+llvmlite==0.43.0
 matplotlib==3.8.4
 matplotlib-inline==0.1.7
 memory-profiler==0.61.0
 nest-asyncio==1.6.0
 netCDF4==1.6.5
 networkx==3.2.1
+numba==0.60.0
 numpy==1.26.4
 packaging==24.0
 pandas==2.2.3

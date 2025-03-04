@@ -2,50 +2,54 @@ from netCDF4 import Dataset
 import numpy as np
 from lib.cloudfield import CloudField
 from memory_profiler import profile
+import gc
 
 # @profile
 def load_cloud_field_from_file(file_path, file_names, timestep, config):
     """
     Load cloud data from files for a specific timestep and create a CloudField object.
-
+    
     Returns:
     - A CloudField object for the given timestep.
     """
-    # Load 'l' data
-    l_dataset = Dataset(f"{file_path}{file_names['l']}", 'r')
-    l_data = l_dataset.variables['l'][timestep, :, :, :]
-
-    # Load 'p' data
-    p_dataset = Dataset(f"{file_path}{file_names['p']}", 'r')
-    p_data = p_dataset.variables['p'][timestep, :, :, :]
-
-    # load 'theta_l' data
-    theta_l_dataset = Dataset(f"{file_path}{file_names['t']}", 'r')
-    theta_l_data = theta_l_dataset.variables['t'][timestep, :, :, :]
-
-    # Load 'q_t' data
-    q_t_dataset = Dataset(f"{file_path}{file_names['q']}", 'r')
-    q_t_data = q_t_dataset.variables['q'][timestep, :, :, :]
-
+    print(f"Loading data for timestep {timestep}...")
+    
+    # Load grid coordinates first (needed for all datasets)
+    with Dataset(f"{file_path}{file_names['l']}", 'r') as l_dataset:
+        xt = l_dataset.variables['xt'][:]
+        yt = l_dataset.variables['yt'][:]
+        zt = l_dataset.variables['zt'][:]
+    
+    # Load datasets one by one to minimize memory usage
+    with Dataset(f"{file_path}{file_names['l']}", 'r') as dataset:
+        l_data = dataset.variables['l'][timestep, :, :, :]
+    
+    with Dataset(f"{file_path}{file_names['p']}", 'r') as dataset:
+        p_data = dataset.variables['p'][timestep, :, :, :]
+    
+    with Dataset(f"{file_path}{file_names['t']}", 'r') as dataset:
+        theta_l_data = dataset.variables['t'][timestep, :, :, :]
+    
+    with Dataset(f"{file_path}{file_names['q']}", 'r') as dataset:
+        q_t_data = dataset.variables['q'][timestep, :, :, :]
+    
     # Load 'w' data if vertical velocity condition is enabled
-    w_data = None
     if config['w_switch']:
-        w_dataset = Dataset(f"{file_path}{file_names['w']}", 'r')
-        w_data = w_dataset.variables['w'][timestep, :, :, :]
-
-    # Load grid coordinates
-    xt = l_dataset.variables['xt'][:]
-    yt = l_dataset.variables['yt'][:]
-    zt = l_dataset.variables['zt'][:]
-
+        with Dataset(f"{file_path}{file_names['w']}", 'r') as dataset:
+            w_data = dataset.variables['w'][timestep, :, :, :]
+    else:
+        w_data = None
+    
     # Create a CloudField object
     cloud_field = CloudField(l_data, w_data, p_data, theta_l_data, q_t_data, timestep, config, xt, yt, zt)
-
-    # Memory management
-    del l_data, xt, yt, zt
+    
+    # Explicitly clear variables to help garbage collection
+    del l_data, p_data, theta_l_data, q_t_data
     if w_data is not None:
         del w_data
-
+    
+    gc.collect()  # Force garbage collection
+    
     return cloud_field
 
 def load_u_field(file_path, file_name, timestep):
