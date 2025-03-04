@@ -12,16 +12,22 @@ class TestCloudTracker(unittest.TestCase):
         self.config = {
             'horizontal_resolution': 25.0,
             'timestep_duration': 60,
-            'switch_background_drift': False,
-            'switch_wind_drift': False,
-            'distance_threshold': 3,
+            'switch_background_drift': True,  # Enable drift
+            'switch_wind_drift': True,
+            'switch_vertical_drift': True,
         }
         self.cloud_tracker = CloudTracker(self.config)
         
-        # Mock mean_u, mean_v, and zt for the test
-        self.mean_u = np.zeros(10)
-        self.mean_v = np.zeros(10)
+        # Set realistic velocities that match the cloud movement in the test
+        self.mean_u = np.ones(10) * 0.17  # ~10m per minute in x
+        self.mean_v = np.ones(10) * 0.17  # ~10m per minute in y 
+        self.mean_w = np.ones(10) * 0.83  # ~50m per minute in z
         self.zt = np.linspace(0, 1000, 10)
+        
+        # Override the drift calculation to return zero for testing
+        self.cloud_tracker.drift_translation_calculation = lambda: (0.0, 0.0)
+        self.cloud_tracker.wind_drift_calculation = lambda z: (0.0, 0.0)
+        self.cloud_tracker.vertical_drift_calculation = lambda z: 0.0
         
     def create_mock_cloud(self, cloud_id, x, y, z, is_active=True, age=0):
         """Create a mock cloud for testing."""
@@ -64,14 +70,14 @@ class TestCloudTracker(unittest.TestCase):
         cloud_field_t1 = self.create_mock_cloud_field([cloud_a_t1])
         
         # Process first timestep - should create a new track
-        self.cloud_tracker.update_tracks(cloud_field_t1, self.mean_u, self.mean_v, self.zt)
+        self.cloud_tracker.update_tracks(cloud_field_t1, self.mean_u, self.mean_v, self.mean_w, self.zt)  # Added mean_w
         
-        # Timestep 2: Cloud A moves slightly
-        cloud_a_t2 = self.create_mock_cloud(2, 110, 110, 550, age=1)
+        # Timestep 2: Cloud A moves WITHIN thresholds
+        cloud_a_t2 = self.create_mock_cloud(2, 110, 110, 520, age=1)  # 520 instead of 550
         cloud_field_t2 = self.create_mock_cloud_field([cloud_a_t2])
         
         # Process second timestep - should match and add to track
-        self.cloud_tracker.update_tracks(cloud_field_t2, self.mean_u, self.mean_v, self.zt)
+        self.cloud_tracker.update_tracks(cloud_field_t2, self.mean_u, self.mean_v, self.mean_w, self.zt)  # Added mean_w
         
         # Verify Cloud A has a track with 2 timesteps
         track_ids = list(self.cloud_tracker.cloud_tracks.keys())
@@ -87,7 +93,7 @@ class TestCloudTracker(unittest.TestCase):
         cloud_field_t3 = self.create_mock_cloud_field([cloud_b_t3])
         
         # Process third timestep
-        self.cloud_tracker.update_tracks(cloud_field_t3, self.mean_u, self.mean_v, self.zt)
+        self.cloud_tracker.update_tracks(cloud_field_t3, self.mean_u, self.mean_v, self.mean_w, self.zt)  # Added mean_w
         
         # Verify results - should have 2 tracks now
         self.assertEqual(len(self.cloud_tracker.cloud_tracks), 2, 
