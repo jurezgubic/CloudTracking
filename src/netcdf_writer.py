@@ -8,7 +8,7 @@ def initialize_netcdf(file_path, zt):
     with Dataset(file_path, 'w', format='NETCDF4') as root_grp:
         root_grp.createDimension('track', 1000)  # Fixed large number of tracks
         root_grp.createDimension('time', None)  # Unlimited time dimension
-        root_grp.createDimension('point', 10000)  # Static dimension for cloud points Warning: Not in use, crude test remnant!
+        root_grp.createDimension('point', 1000)  # Static dimension for cloud points Warning: Not in use, crude test remnant!
         root_grp.createDimension('coordinate', 3)  # Static dimension for 3D coordinates
         root_grp.createDimension('level', len(zt))  # Using consistent height levels
 

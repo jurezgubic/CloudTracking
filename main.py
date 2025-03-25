@@ -31,10 +31,10 @@ total_timesteps = 10
 
 # Set configuration parameters
 config = {
-    'min_size': 10,  # Minimum size of cloud objects to be considered
+    'min_size': 3,  # Minimum size of cloud objects to be considered
     'l_condition': 0.00001, # kg/kg. Minimum threshold for liquid water
     'w_condition': 0.0,  # m/s. Minimum condition for vertical velocity
-    'w_switch': True,  # True if you want to use vertical velocity threshold
+    'w_switch': False,  # True if you want to use vertical velocity threshold
     'timestep_duration': 60,  # Duration between timesteps in seconds
     'distance_threshold': 0, # Max dist between merging clouds across boundary
     'plot_switch': False, # Plot cloud field at each timestep
@@ -47,7 +47,7 @@ config = {
     'cloud_base_altitude': 700, # m, from input data analysis
 }
 
-# Add this function to calculate mean_w
+# Function to calculate mean_w
 def calculate_mean_vertical_velocity(file_path, file_names, timestep):
     """Calculate mean vertical velocity for each z-level at the given timestep."""
     w_data = data_management.load_w_field(file_path, file_names['w'], timestep)
