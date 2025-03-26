@@ -45,50 +45,73 @@ class CloudTracker:
         return vert_dz
 
     def update_tracks(self, current_cloud_field, mean_u, mean_v, mean_w, zt):
-        """ Update the cloud tracks with the current cloud field. """
+        """Update the cloud tracks with the current cloud field."""
         self.mean_u = mean_u
         self.mean_v = mean_v
-        self.mean_w = mean_w  # Store mean vertical velocity
+        self.mean_w = mean_w
         self.zt = zt
         new_matched_clouds = set()
+        
+        # Dictionary to track cloud inheritance - maps current cloud_id to (parent_cloud, parent_age)
+        cloud_inheritance = {}
 
-        if not self.cloud_tracks:  # If this is the first timestep
-            for cloud_id, cloud in current_cloud_field.clouds.items(): # Add all clouds as new tracks
-                cloud.age = 0 # initialise cloud age
-                self.cloud_tracks[cloud_id] = [cloud] # Add the cloud as a new track
+        if not self.cloud_tracks:  # First timestep
+            for cloud_id, cloud in current_cloud_field.clouds.items():
+                cloud.age = 0
+                self.cloud_tracks[cloud_id] = [cloud]
         else:
-            # check each existing track for a match in the current cloud field
+            # FIRST PASS: Find all potential matches between previous and current clouds
             for track_id, track in list(self.cloud_tracks.items()):
                 last_cloud_in_track = track[-1]
-                # Skip inactive tracks
                 if not last_cloud_in_track.is_active:
                     continue
-
+                    
+                # Find all potential fragments that match this cloud
+                for cloud_id, cloud in current_cloud_field.clouds.items():
+                    if self.is_match(cloud, last_cloud_in_track):
+                        # Record this potential inheritance
+                        cloud_inheritance[cloud_id] = (last_cloud_in_track, track_id)
+            
+            # SECOND PASS: Process matches, maintaining age continuity for splits
+            for track_id, track in list(self.cloud_tracks.items()):
+                last_cloud_in_track = track[-1]
+                if not last_cloud_in_track.is_active:
+                    continue
+                    
                 found_match = False
-
-                for cloud_id, cloud in current_cloud_field.clouds.items(): # Check if the cloud is a match
-                    if cloud_id not in new_matched_clouds and self.is_match(cloud, last_cloud_in_track): # If the cloud is a match
-                        # print ("Processing cloud ID: ", cloud_id)
-                        current_max_height = max(z for _, _, z in cloud.points) # Update the max height of the cloud
-                        if current_max_height > last_cloud_in_track.max_height: # If the current cloud is higher
-                            last_cloud_in_track.max_height = current_max_height # Update the max height of the cloud
-                        cloud.age = last_cloud_in_track.age + 1 # increment the age of the cloud
-                        track.append(cloud) # Add the cloud to the track
-                        new_matched_clouds.add(cloud_id) # Mark the cloud as matched
+                
+                # Find primary match to continue the track
+                for cloud_id, cloud in current_cloud_field.clouds.items():
+                    if cloud_id not in new_matched_clouds and cloud_id in cloud_inheritance and cloud_inheritance[cloud_id][1] == track_id:
+                        # Update max height if needed
+                        current_max_height = max(z for _, _, z in cloud.points)
+                        if current_max_height > last_cloud_in_track.max_height:
+                            last_cloud_in_track.max_height = current_max_height
+                        
+                        # Continue the track with this fragment
+                        cloud.age = last_cloud_in_track.age + 1
+                        track.append(cloud)
+                        new_matched_clouds.add(cloud_id)
                         found_match = True
                         break
-
+                
                 if not found_match:
-                    # ensure that only the currenty instance of cloud is marked as inactive
-                    last_cloud_in_track.is_active = False  # Mark the last cloud as inactive
-
-            # Add new clouds as new tracks
-            for cloud_id, cloud in current_cloud_field.clouds.items(): # Add all unmatched clouds as new tracks
-                if cloud_id not in new_matched_clouds: # If the cloud is not matched
-                    cloud.age = 0 # initialise cloud age to 0
-                    self.cloud_tracks[cloud_id] = [cloud] # Add the cloud as a new track
-
-
+                    # Mark as inactive if no matches found
+                    last_cloud_in_track.is_active = False
+            
+            # Handle remaining fragments that are splits but not primary matches
+            for cloud_id, cloud in current_cloud_field.clouds.items():
+                if cloud_id not in new_matched_clouds:
+                    if cloud_id in cloud_inheritance:
+                        # This is a split cloud - inherit age from parent
+                        parent_cloud = cloud_inheritance[cloud_id][0]
+                        cloud.age = parent_cloud.age + 1
+                    else:
+                        # This is a genuinely new cloud
+                        cloud.age = 0
+                    
+                    # Start a new track either way
+                    self.cloud_tracks[cloud_id] = [cloud]
 
     def match_clouds(self, current_cloud_field):
         """ Match clouds from the current cloud field to the existing tracks. """

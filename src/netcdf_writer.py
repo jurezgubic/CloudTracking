@@ -6,9 +6,9 @@ def initialize_netcdf(file_path, zt):
     """Create a new NetCDF file with the necessary dimensions and variables for cloud tracking data."""
     # Create the file and define dimensions and variables
     with Dataset(file_path, 'w', format='NETCDF4') as root_grp:
-        root_grp.createDimension('track', 1000)  # Fixed large number of tracks
+        root_grp.createDimension('track', 10000)  # Fixed large number of tracks
         root_grp.createDimension('time', None)  # Unlimited time dimension
-        root_grp.createDimension('point', 1000)  # Static dimension for cloud points Warning: Not in use, crude test remnant!
+        #root_grp.createDimension('point', 100000)  # Static dimension for cloud points Warning: Not in use, crude test remnant!
         root_grp.createDimension('coordinate', 3)  # Static dimension for 3D coordinates
         root_grp.createDimension('level', len(zt))  # Using consistent height levels
 
@@ -33,7 +33,7 @@ def initialize_netcdf(file_path, zt):
         root_grp.createVariable('location_x', 'f4', ('track', 'time'), fill_value=np.nan)
         root_grp.createVariable('location_y', 'f4', ('track', 'time'), fill_value=np.nan)
         root_grp.createVariable('location_z', 'f4', ('track', 'time'), fill_value=np.nan)
-        root_grp.createVariable('cloud_points', 'f4', ('track', 'time', 'point', 'coordinate'), fill_value=np.nan)
+        #root_grp.createVariable('cloud_points', 'f4', ('track', 'time', 'point', 'coordinate'), fill_value=np.nan)
         root_grp.createVariable('age', 'i4', ('track', 'time'), fill_value=-1)  # Add age variable
 
         height_var = root_grp.createVariable('height', 'f4', ('level', ))
@@ -66,7 +66,7 @@ def write_cloud_tracks_to_netcdf(tracks, file_path, timestep, zt):
         loc_x_var = root_grp.variables['location_x']
         loc_y_var = root_grp.variables['location_y']
         loc_z_var = root_grp.variables['location_z']
-        cloud_points_var = root_grp.variables['cloud_points']
+        #cloud_points_var = root_grp.variables['cloud_points']
         age_var = root_grp.variables['age']
         valid_track_var = root_grp.variables['valid_track']  # We can reference it if needed
 
@@ -90,8 +90,8 @@ def write_cloud_tracks_to_netcdf(tracks, file_path, timestep, zt):
                 cloud_base_area_var[i, timestep] = cloud.cloud_base_area
                 surface_area_var[i, timestep] = cloud.surface_area
                 loc_x_var[i, timestep], loc_y_var[i, timestep], loc_z_var[i, timestep] = cloud.location
-                points = np.array([list(p) for p in cloud.points[:10000]])
-                cloud_points_var[i, timestep, :len(points), :] = points
+                #points = np.array([list(p) for p in cloud.points[:10000]])
+                #cloud_points_var[i, timestep, :len(points), :] = points
                 age_var[i, timestep] = cloud.age
             else:
                 # Set current and future entries to NaN for inactive clouds
@@ -112,6 +112,6 @@ def write_cloud_tracks_to_netcdf(tracks, file_path, timestep, zt):
                 loc_x_var[i, timestep:] = np.nan
                 loc_y_var[i, timestep:] = np.nan
                 loc_z_var[i, timestep:] = np.nan
-                cloud_points_var[i, timestep:, :, :] = np.nan
+                #cloud_points_var[i, timestep:, :, :] = np.nan
                 age_var[i, timestep:] = -1
 
