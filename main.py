@@ -27,12 +27,12 @@ file_name = {
 output_netcdf_path = 'cloud_results.nc'
 
 # Set number of timesteps to process
-total_timesteps = 6
+total_timesteps = 40
 
 # Set configuration parameters
 config = {
     'min_size': 3,  # Minimum size of cloud objects to be considered
-    'l_condition': 0.0006, # kg/kg. Minimum threshold for liquid water
+    'l_condition': 0.00001, # kg/kg. Minimum threshold for liquid water
     'w_condition': 0.0,  # m/s. Minimum condition for vertical velocity
     'w_switch': False,  # True if you want to use vertical velocity threshold
     'timestep_duration': 60,  # Duration between timesteps in seconds
@@ -88,26 +88,35 @@ def process_clouds(cloud_tracker):
 def finalize_partial_lifetime_tracks(cloud_tracker, total_timesteps):
     """Flag partial-lifetime tracks in the NetCDF so they can be ignored in analyses."""
     partial_ids = []
+    merged_ids = []
+    
     for t_id, track in cloud_tracker.get_tracks().items():
         if not track:
             continue
+        
         t_first = track[0].timestep
         t_last = track[-1].timestep
-        # Check if it started at the first step or is active at the last step
-        if t_first == 0 or (track[-1].is_active and t_last == total_timesteps - 1):
+        last_cloud = track[-1]
+        
+        # Check for partial lifetime
+        if t_first == 0 or (last_cloud.is_active and t_last == total_timesteps - 1):
             partial_ids.append(t_id)
+        
+        # Check for merged clouds
+        if not last_cloud.is_active and last_cloud.merged_into is not None:
+            merged_ids.append(t_id)
 
-    if not partial_ids:
-        print("No partial-lifetime tracks found.")
-        return
-
-    print(f"Flagging {len(partial_ids)} partial-lifetime track(s) as invalid...")
+    # Update flags in the NetCDF
     with Dataset(output_netcdf_path, "r+") as ds:
         valid_var = ds.variables['valid_track']
+        merged_var = ds.variables['merged_into']
+        
         for i, t_id in enumerate(cloud_tracker.get_tracks().keys()):
-            # If t_id happens to be in partial_ids, set valid_track to 0
+            # Handle partial lifetime flags
             if t_id in partial_ids:
                 valid_var[i] = 0
+            
+            # Note: merged_into is already handled in the write_cloud_tracks_to_netcdf function
 
 
 def main(delete_existing_file):

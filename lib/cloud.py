@@ -42,6 +42,7 @@ class Cloud:
         self.eff_radius_per_level = eff_radius_per_level
         self.is_active = is_active
         self.age = age
+        self.merged_into = None  # Track ID this cloud merged into, if any
 
     def update_max_height(self, new_height):
         """ Update the max height of the cloud """

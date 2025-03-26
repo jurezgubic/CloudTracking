@@ -1,4 +1,3 @@
-
 # filepath: /Users/jure/PhD/coding/tracking/cloudtracker/tests/test_main.py
 import unittest
 from unittest.mock import patch, MagicMock
@@ -12,9 +11,12 @@ class TestMainPartialLifetime(unittest.TestCase):
         """
         Test that partial-lifetime clouds are flagged as invalid in the NetCDF file.
         """
-        # Mock a netCDF Dataset instance
+        # Mock a netCDF Dataset instance with both required variables
         mock_dataset = MagicMock()
-        mock_dataset.variables = {"valid_track": [1, 1, 1]}
+        mock_dataset.variables = {
+            "valid_track": [1, 1, 1],
+            "merged_into": MagicMock()  # Add the merged_into variable to the mock
+        }
         mock_dataset_cls.return_value.__enter__.return_value = mock_dataset
 
         # Create a mock CloudTracker with 3 tracks: 

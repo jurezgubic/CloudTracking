@@ -52,7 +52,7 @@ class CloudTracker:
         self.zt = zt
         new_matched_clouds = set()
         
-        # Dictionary to track cloud inheritance - maps current cloud_id to (parent_cloud, parent_age)
+        # Dictionary to track cloud inheritance - maps current cloud_id to list of (parent_cloud, parent_track_id)
         cloud_inheritance = {}
 
         if not self.cloud_tracks:  # First timestep
@@ -70,9 +70,33 @@ class CloudTracker:
                 for cloud_id, cloud in current_cloud_field.clouds.items():
                     if self.is_match(cloud, last_cloud_in_track):
                         # Record this potential inheritance
-                        cloud_inheritance[cloud_id] = (last_cloud_in_track, track_id)
+                        if cloud_id not in cloud_inheritance:
+                            cloud_inheritance[cloud_id] = []
+                        cloud_inheritance[cloud_id].append((last_cloud_in_track, track_id))
             
-            # SECOND PASS: Process matches, maintaining age continuity for splits
+            # SECOND PASS: Handle merges and splits with proper age inheritance
+            # Process merges first (clouds with multiple potential parents)
+            merge_candidates = {cid: parents for cid, parents in cloud_inheritance.items() if len(parents) > 1}
+            
+            for cloud_id, parent_list in merge_candidates.items():
+                cloud = current_cloud_field.clouds[cloud_id]
+                
+                # Sort parents by age to find oldest
+                parent_list.sort(key=lambda x: x[0].age, reverse=True)
+                oldest_parent, oldest_parent_track_id = parent_list[0]
+                
+                # Continue oldest parent's track
+                cloud.age = oldest_parent.age + 1
+                self.cloud_tracks[oldest_parent_track_id].append(cloud)
+                new_matched_clouds.add(cloud_id)
+                
+                # Mark other parents as merged
+                for parent, parent_track_id in parent_list[1:]:
+                    if parent_track_id != oldest_parent_track_id:
+                        parent.is_active = False
+                        parent.merged_into = oldest_parent_track_id
+            
+            # THIRD PASS: Process regular matches and splits
             for track_id, track in list(self.cloud_tracks.items()):
                 last_cloud_in_track = track[-1]
                 if not last_cloud_in_track.is_active:
@@ -82,35 +106,45 @@ class CloudTracker:
                 
                 # Find primary match to continue the track
                 for cloud_id, cloud in current_cloud_field.clouds.items():
-                    if cloud_id not in new_matched_clouds and cloud_id in cloud_inheritance and cloud_inheritance[cloud_id][1] == track_id:
-                        # Update max height if needed
-                        current_max_height = max(z for _, _, z in cloud.points)
-                        if current_max_height > last_cloud_in_track.max_height:
-                            last_cloud_in_track.max_height = current_max_height
+                    if cloud_id not in new_matched_clouds and cloud_id in cloud_inheritance:
+                        # Check if this track is in the potential parents
+                        for parent, parent_track_id in cloud_inheritance[cloud_id]:
+                            if parent_track_id == track_id:
+                                # Update max height if needed
+                                current_max_height = max(z for _, _, z in cloud.points)
+                                if current_max_height > last_cloud_in_track.max_height:
+                                    last_cloud_in_track.max_height = current_max_height
+                                
+                                # Continue the track with this fragment
+                                cloud.age = last_cloud_in_track.age + 1
+                                track.append(cloud)
+                                new_matched_clouds.add(cloud_id)
+                                found_match = True
+                                break
                         
-                        # Continue the track with this fragment
-                        cloud.age = last_cloud_in_track.age + 1
-                        track.append(cloud)
-                        new_matched_clouds.add(cloud_id)
-                        found_match = True
-                        break
+                        if found_match:
+                            break
                 
                 if not found_match:
-                    # Mark as inactive if no matches found
-                    last_cloud_in_track.is_active = False
+                    # Mark as inactive if no matches found (and not already marked as merged)
+                    if last_cloud_in_track.merged_into is None:
+                        last_cloud_in_track.is_active = False
             
-            # Handle remaining fragments that are splits but not primary matches
+            # Handle remaining fragments (splits and new clouds)
             for cloud_id, cloud in current_cloud_field.clouds.items():
                 if cloud_id not in new_matched_clouds:
                     if cloud_id in cloud_inheritance:
                         # This is a split cloud - inherit age from parent
-                        parent_cloud = cloud_inheritance[cloud_id][0]
+                        # For consistency, use the oldest parent if multiple
+                        parents = cloud_inheritance[cloud_id]
+                        parents.sort(key=lambda x: x[0].age, reverse=True)
+                        parent_cloud = parents[0][0]
                         cloud.age = parent_cloud.age + 1
                     else:
                         # This is a genuinely new cloud
                         cloud.age = 0
                     
-                    # Start a new track either way
+                    # Start a new track
                     self.cloud_tracks[cloud_id] = [cloud]
 
     def match_clouds(self, current_cloud_field):

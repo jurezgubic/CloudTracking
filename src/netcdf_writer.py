@@ -36,6 +36,9 @@ def initialize_netcdf(file_path, zt):
         #root_grp.createVariable('cloud_points', 'f4', ('track', 'time', 'point', 'coordinate'), fill_value=np.nan)
         root_grp.createVariable('age', 'i4', ('track', 'time'), fill_value=-1)  # Add age variable
 
+        # Add merged_into variable to track which clouds merged into others
+        merged_into_var = root_grp.createVariable('merged_into', 'i4', ('track', 'time'), fill_value=-1)
+
         height_var = root_grp.createVariable('height', 'f4', ('level', ))
         height_var[:] = zt  # Assign the height values
 
@@ -69,6 +72,7 @@ def write_cloud_tracks_to_netcdf(tracks, file_path, timestep, zt):
         #cloud_points_var = root_grp.variables['cloud_points']
         age_var = root_grp.variables['age']
         valid_track_var = root_grp.variables['valid_track']  # We can reference it if needed
+        merged_into_var = root_grp.variables['merged_into']
 
         # Write data for active clouds at this timestep
         active_tracks = list(tracks.keys())
@@ -114,4 +118,16 @@ def write_cloud_tracks_to_netcdf(tracks, file_path, timestep, zt):
                 loc_z_var[i, timestep:] = np.nan
                 #cloud_points_var[i, timestep:, :, :] = np.nan
                 age_var[i, timestep:] = -1
+
+                # Write merged_into information
+                if not cloud.is_active and cloud.merged_into is not None:
+                    # Find the index of the track it merged into
+                    if cloud.merged_into in active_tracks:
+                        merged_idx = active_tracks.index(cloud.merged_into)
+                        merged_into_var[i, timestep] = merged_idx
+                    else:
+                        # If the track it merged into isn't in our list (shouldn't happen)
+                        merged_into_var[i, timestep] = -2  # Special value indicating merged but target unknown
+                else:
+                    merged_into_var[i, timestep] = -1  # -1 means not merged
 
