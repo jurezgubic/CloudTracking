@@ -44,12 +44,19 @@ class CloudTracker:
             vert_dz = 0
         return vert_dz
 
-    def update_tracks(self, current_cloud_field, mean_u, mean_v, mean_w, zt):
+    def update_tracks(self, current_cloud_field, mean_u, mean_v, mean_w, zt, xt, yt):
         """Update the cloud tracks with the current cloud field."""
         self.mean_u = mean_u
         self.mean_v = mean_v
         self.mean_w = mean_w
         self.zt = zt
+        self.xt = xt
+        self.yt = yt
+        
+        # Calculate domain dimensions (for use in boundary handling)
+        self.domain_size_x = (self.xt[-1] - self.xt[0]) + self.config['horizontal_resolution']
+        self.domain_size_y = (self.yt[-1] - self.yt[0]) + self.config['horizontal_resolution']
+        
         new_matched_clouds = set()
         
         # Dictionary to track cloud inheritance - maps current cloud_id to list of (parent_cloud, parent_track_id)
@@ -204,7 +211,10 @@ class CloudTracker:
             if z not in height_to_points:
                 height_to_points[z] = []
             height_to_points[z].append((x, y, z))
-        
+
+        # Track if we find any boundary crossing match
+        found_boundary_crossing = False
+
         # Create a KD-tree for each height level with 3D drift
         for z, points in height_to_points.items():
             # Calculate wind drift for this height
@@ -229,12 +239,76 @@ class CloudTracker:
             query_points = np.array([(x, y, cz) for x, y, cz in cloud.points 
                                    if z_min <= cz <= z_max])
             
+            # Cyclic boundary handling
             if len(query_points) > 0:
-                # Find if any points are within threshold distance
-                distances, _ = tree.query(query_points, k=1)
-                if np.any(distances <= horizontal_threshold):
-                    return True
+                # Create extended query points with domain boundary wrapping
+                extended_query_points = list(query_points)
+                
+                # Wrap points near domain boundaries
+                for pt in query_points:
+                    x, y, cz = pt
                     
+                    # Wrap points near x-boundaries
+                    if x < self.xt[0] + horizontal_threshold:
+                        extended_query_points.append([x + self.domain_size_x, y, cz])
+                    elif x > self.xt[-1] - horizontal_threshold:
+                        extended_query_points.append([x - self.domain_size_x, y, cz])
+                    
+                    # Wrap points near y-boundaries
+                    if y < self.yt[0] + horizontal_threshold:
+                        extended_query_points.append([x, y + self.domain_size_y, cz])
+                    elif y > self.yt[-1] - horizontal_threshold:
+                        extended_query_points.append([x, y - self.domain_size_y, cz])
+                    
+                    # Handle corner cases (diagonal wrapping)
+                    if x < self.xt[0] + horizontal_threshold and y < self.yt[0] + horizontal_threshold:
+                        extended_query_points.append([x + self.domain_size_x, y + self.domain_size_y, cz])
+                    if x < self.xt[0] + horizontal_threshold and y > self.yt[-1] - horizontal_threshold:
+                        extended_query_points.append([x + self.domain_size_x, y - self.domain_size_y, cz])
+                    if x > self.xt[-1] - horizontal_threshold and y < self.yt[0] + horizontal_threshold:
+                        extended_query_points.append([x - self.domain_size_x, y + self.domain_size_y, cz])
+                    if x > self.xt[-1] - horizontal_threshold and y > self.yt[-1] - horizontal_threshold:
+                        extended_query_points.append([x - self.domain_size_x, y - self.domain_size_y, cz])
+                
+                # Convert to numpy array
+                extended_query_points = np.array(extended_query_points)
+                
+                # Check if standard matching would work (no boundary crossing)
+                distances_orig, _ = tree.query(query_points, k=1)
+                orig_match = np.any(distances_orig <= horizontal_threshold)
+                
+                # Check if extended matching would work
+                distances, _ = tree.query(extended_query_points, k=1)
+                extended_match = np.any(distances <= horizontal_threshold)
+                
+                # Detect pure boundary crossing (matches only with wrapped points)
+                if extended_match and not orig_match:
+                    found_boundary_crossing = True
+                    print(f"BOUNDARY CROSSING DETECTED! Track: {last_cloud_in_track.cloud_id}, Cloud: {cloud.cloud_id}")
+                    print(f"  Horizontal threshold: {horizontal_threshold}")
+                    print(f"  Domain size: {self.domain_size_x} x {self.domain_size_y}")
+                    print(f"  Cloud points near boundary: {len(extended_query_points) - len(query_points)}")
+                    
+                    # Additional debug information
+                    if hasattr(cloud, 'location') and hasattr(last_cloud_in_track, 'location'):
+                        print(f"  Current cloud location: {cloud.location}")
+                        print(f"  Previous cloud location: {last_cloud_in_track.location}")
+                        
+                        # Calculate expected location with drift
+                        expected_x = last_cloud_in_track.location[0] + adjusted_dx
+                        expected_y = last_cloud_in_track.location[1] + adjusted_dy
+                        print(f"  Expected location with drift: ({expected_x}, {expected_y})")
+                        
+                        # Check which boundary was crossed
+                        if abs(cloud.location[0] - expected_x) > self.domain_size_x/2:
+                            print(f"  X-boundary crossed (E-W)")
+                        if abs(cloud.location[1] - expected_y) > self.domain_size_y/2:
+                            print(f"  Y-boundary crossed (N-S)")
+                
+                # Return True if we find any match (boundary crossing or normal)
+                if extended_match:
+                    return True
+    
         return False
 
         # Visualize the points for background drift trabnslation (belongs to is_match function)

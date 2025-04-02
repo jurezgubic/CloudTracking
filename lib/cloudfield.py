@@ -170,7 +170,7 @@ class CloudField:
         
         # Create Cloud objects in batches to manage memory
         clouds = {}
-        batch_size = 50  # Process 20 clouds at a time
+        batch_size = 50  # Process 50 clouds at a time
         
         for batch_start in range(0, len(regions), batch_size):
             batch_end = min(batch_start + batch_size, len(regions))
@@ -180,8 +180,8 @@ class CloudField:
                 if region.area >= config['min_size']:
                     cloud_id = f"{self.timestep}-{region.label}"
                     
-                    # Print progress every 20 clouds
-                    if (batch_start + region_idx + 1) % 20 == 0:
+                    # Print progress every 50 clouds
+                    if (batch_start + region_idx + 1) % 50 == 0:
                         print(f"Processing cloud {batch_start + region_idx + 1} of {len(regions)}")
                     
                     # Get cloud mask and point indices
