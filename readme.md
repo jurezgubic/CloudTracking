@@ -45,3 +45,9 @@ pip install -r requirements.txt
 - Or`mprof run main.py`. Then plot using `mprof plot`
 - Warning: Do NOT run for the entire dataset (far too expensive). 
 
+### Basic Output Visualisation
+Use the following command to visualise cloud lifecycles, active clouds per timestep, and generate lifetime and size bar charts:
+
+```bash
+python analyse_clouds.py cloud_results.nc
+```
