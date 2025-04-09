@@ -27,7 +27,7 @@ file_name = {
 output_netcdf_path = 'cloud_results.nc'
 
 # Set number of timesteps to process
-total_timesteps = 30
+total_timesteps = 15
 
 # Set configuration parameters
 config = {
@@ -56,9 +56,14 @@ def calculate_mean_vertical_velocity(file_path, file_names, timestep):
 
 # @profile
 def process_clouds(cloud_tracker):
+    partial_lifetime_cloud_counter = 0  # Initialize counter
+    
+    # Track all cloud IDs that are "tainted" by having ancestry from timestep 1
+    tainted_lineage = set()
+    
     for timestep in range(total_timesteps):
-        start = time.time() # Start timer
-        print ("-"*50)
+        start = time.time()  # Start timer
+        print("-"*50)
         print(f"Processing timestep {timestep+1} of {total_timesteps}")
 
         # Load cloud field for the current timestep
@@ -66,24 +71,77 @@ def process_clouds(cloud_tracker):
 
         # Calculate mean velocities for the current timestep
         mean_u, mean_v = calculate_mean_velocities(base_file_path, file_name, timestep)
-        mean_w = calculate_mean_vertical_velocity(base_file_path, file_name, timestep)  # Calculate mean vertical velocity
+        mean_w = calculate_mean_vertical_velocity(base_file_path, file_name, timestep)
 
         # Track clouds across timesteps
         cloud_tracker.update_tracks(cloud_field, mean_u, mean_v, mean_w, 
-                                  cloud_field.zt, cloud_field.xt, cloud_field.yt)
+                                   cloud_field.zt, cloud_field.xt, cloud_field.yt)
 
-        # Write cloud track information to netCDF
+        # Special handling for each timestep:
+        if timestep == 0:
+            # First timestep: All clouds are "tainted" because we didn't observe their birth
+            timestep_0_ids = set(cloud_tracker.cloud_tracks.keys())
+            tainted_lineage.update(timestep_0_ids)
+            
+            # Remove these partial tracks from the tracker before writing
+            partial_tracks = list(timestep_0_ids)
+            partial_lifetime_cloud_counter += len(partial_tracks)
+            
+            for track_id in partial_tracks:
+                del cloud_tracker.cloud_tracks[track_id]
+                
+            print(f"Removed {len(partial_tracks)} partial lifetime clouds from first timestep")
+            
+        else:
+            # Identify clouds that are "tainted" by descent from timestep 1 clouds
+            newly_tainted = []
+            
+            for track_id, track in cloud_tracker.cloud_tracks.items():
+                # Skip already tainted
+                if track_id in tainted_lineage:
+                    continue
+                
+                # Check if this cloud has any parent in the tainted set
+                for cloud in track:
+                    if hasattr(cloud, 'merged_into') and cloud.merged_into in tainted_lineage:
+                        newly_tainted.append(track_id)
+                        break
+            
+            # Update the tainted set
+            tainted_lineage.update(newly_tainted)
+            
+            # Remove newly tainted tracks
+            if newly_tainted:
+                partial_lifetime_cloud_counter += len(newly_tainted)
+                print(f"Removing {len(newly_tainted)} clouds continuing from timestep 1")
+                
+                for track_id in newly_tainted:
+                    del cloud_tracker.cloud_tracks[track_id]
+
+        # Write cloud track information to netCDF (now only writing complete lifecycle clouds)
         zt = cloud_field.zt
         write_cloud_tracks_to_netcdf(cloud_tracker.get_tracks(), output_netcdf_path, timestep, zt)
 
         # Force garbage collection to avoid memory issues
         gc.collect()
-        stop = time.time() # Stop timer
-        print (f"Time taken: {(stop-start)/60:.1f} minutes")
+        stop = time.time()  # Stop timer
+        print(f"Time taken: {(stop-start)/60:.1f} minutes")
+    
+    # After all timesteps, identify and remove clouds still active at the end
+    final_partial_tracks = [tid for tid, track in cloud_tracker.cloud_tracks.items() 
+                           if track[-1].is_active and track[-1].timestep == total_timesteps - 1]
+    partial_lifetime_cloud_counter += len(final_partial_tracks)
+    
+    # Remove these final partial tracks
+    for track_id in final_partial_tracks:
+        del cloud_tracker.cloud_tracks[track_id]
+    
+    print("-"*50)
+    print(f"Total partial lifetime clouds removed: {partial_lifetime_cloud_counter}")
     print("Cloud tracking complete.")
 
-    # After all timesteps, flag partial-lifetime clouds
-    finalize_partial_lifetime_tracks(cloud_tracker, total_timesteps)
+    # Write the final state with only complete lifecycle clouds
+    write_cloud_tracks_to_netcdf(cloud_tracker.get_tracks(), output_netcdf_path, total_timesteps-1, zt)
 
 
 def finalize_partial_lifetime_tracks(cloud_tracker, total_timesteps):
@@ -129,7 +187,7 @@ def main(delete_existing_file):
     # Initialize CloudTracker
     cloud_tracker = CloudTracker(config)
 
-    # Process clouds
+    # Process clouds - partial lifetime clouds will be removed inside this function
     process_clouds(cloud_tracker)
 
 if __name__ == "__main__":
