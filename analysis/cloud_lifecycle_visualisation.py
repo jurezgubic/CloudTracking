@@ -86,7 +86,13 @@ def visualise_cloud_lifecycles(netcdf_file, output_file=None, max_tracks=30, min
             
             # Get marker sizes from cloud sizes
             track_sizes = size[track_idx, cloud_timesteps]
-            marker_sizes = np.clip(track_sizes / 50, 20, 200)  # Scale sizes for better visibility
+            
+            # Normalize cloud sizes between 0 and 1
+            min_size = np.nanmin(size)
+            max_size = np.nanmax(size)
+            normalized_sizes = (track_sizes - min_size) / (max_size - min_size)
+            
+            marker_sizes = np.clip(normalized_sizes * 180 + 20, 20, 200)  # Scale sizes for better visibility
             
             # Get y-position (use actual track index for better spacing)
             y_pos = i
