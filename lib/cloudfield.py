@@ -205,8 +205,8 @@ class CloudField:
                     l_values = l_data[point_indices[:, 0], point_indices[:, 1], point_indices[:, 2]]
                     p_values = p_data[point_indices[:, 0], point_indices[:, 1], point_indices[:, 2]]
                     theta_l_values = theta_l_data[point_indices[:, 0], point_indices[:, 1], point_indices[:, 2]]
-                    q_t_values = q_t_data[point_indices[:, 0], point_indices[:, 1], point_indices[:, 2]] / 1000  # g/kg to kg/kg
-                    q_l_values = l_values / 1000  # g/kg to kg/kg
+                    q_t_values = q_t_data[point_indices[:, 0], point_indices[:, 1], point_indices[:, 2]]
+                    q_l_values = l_values
                     q_v_values = q_t_values - q_l_values
 
                     # Convert any masked arrays to regular arrays (needed for Numba)
