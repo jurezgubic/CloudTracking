@@ -181,7 +181,9 @@ class CloudTracker:
             return False
         
         # Basic validation
-        if not cloud.points or not last_cloud_in_track.points:
+        # Check if points are None or empty NumPy arrays
+        if last_cloud_in_track.points is None or last_cloud_in_track.points.size == 0 or \
+           cloud.points is None or cloud.points.size == 0:
             return False
             
         # Calculate horizontal drift
@@ -189,7 +191,7 @@ class CloudTracker:
         
         # Calculate dynamic thresholds based on maximum velocities
         timestep_duration = self.config['timestep_duration']
-        safety_factor = 1.5  # Buffer for turbulence and numerical effects
+        safety_factor = 2.0  # Buffer for turbulence and numerical effects
         
         # Find maximum velocities (get absolute max values)
         if self.mean_u is not None and self.mean_v is not None and self.mean_w is not None:
@@ -199,95 +201,129 @@ class CloudTracker:
             
             # Set minimum thresholds in case velocities are very small
             horizontal_threshold = max(max(max_u, max_v), self.config['horizontal_resolution'])
-            vertical_threshold = max(max_w, self.config['horizontal_resolution'] * 2)
+            vertical_threshold = max_w*2  # Use vertical drift as a threshold
         else:
             # Fallback to config values if mean velocities aren't available
             horizontal_threshold = self.config['horizontal_resolution']
-            vertical_threshold = self.config['horizontal_resolution'] * 3
+            vertical_threshold = self.config['horizontal_resolution'] * 1
         
-        # Group points by height for wind drift calculation
-        height_to_points = {}
-        for x, y, z in last_cloud_in_track.points:
-            if z not in height_to_points:
-                height_to_points[z] = []
-            height_to_points[z].append((x, y, z))
+        # Vectorized approach for iterating through points by height
+        previous_cloud_points_np = last_cloud_in_track.points
+        # Basic validation for previous_cloud_points_np should have already caught empty arrays,
+        # but a check here can be a safeguard if called directly or logic changes.
+        if previous_cloud_points_np.size == 0:
+            return False 
+
+        unique_z_coords_previous = np.unique(previous_cloud_points_np[:, 2])
 
         # Track if we find any boundary crossing match
-        found_boundary_crossing = False
+        found_boundary_crossing = False # This is for logging/debugging boundary crossings
 
-        # Create a KD-tree for each height level with 3D drift
-        for z, points in height_to_points.items():
+        # Create a KD-tree for each height level of the previous cloud after applying drift
+        for z_prev_level in unique_z_coords_previous:
+            points_at_prev_z = previous_cloud_points_np[previous_cloud_points_np[:, 2] == z_prev_level]
+            
+            if points_at_prev_z.shape[0] == 0: # Should not happen if unique_z_coords_previous is from points
+                continue
+
             # Calculate wind drift for this height
-            wind_dx, wind_dy = self.wind_drift_calculation(z)
-            vert_dz = self.vertical_drift_calculation(z)  # Calculate vertical drift
+            wind_dx, wind_dy = self.wind_drift_calculation(z_prev_level)
+            vert_dz = self.vertical_drift_calculation(z_prev_level)
             
             adjusted_dx = dx + wind_dx
             adjusted_dy = dy + wind_dy
-            adjusted_dz = vert_dz  # Vertical displacement
+            adjusted_dz = vert_dz
             
-            # Apply drift to points in 3D
-            adjusted_points = np.array([(x + adjusted_dx, y + adjusted_dy, z + adjusted_dz) for x, y, z in points])
+            # Apply drift to points in 3D (vectorized)
+            drift_vector = np.array([adjusted_dx, adjusted_dy, adjusted_dz])
+            adjusted_points_at_prev_z = points_at_prev_z + drift_vector
             
             # Build KD-tree with 3D points
-            tree = cKDTree(adjusted_points)
+            if adjusted_points_at_prev_z.shape[0] == 0:
+                continue
+            tree = cKDTree(adjusted_points_at_prev_z)
             
-            # Define vertical search range based on the dynamic vertical threshold
-            z_min = z - vertical_threshold
-            z_max = z + vertical_threshold + adjusted_dz
+            # Define vertical search range for current cloud points based on the dynamic vertical threshold
+            z_min_search = z_prev_level - vertical_threshold
+            z_max_search = z_prev_level + vertical_threshold + adjusted_dz # Account for vertical drift
             
-            # Get 3D query points from current cloud near this height
-            query_points = np.array([(x, y, cz) for x, y, cz in cloud.points 
-                                   if z_min <= cz <= z_max])
+            # Get 3D query points from current cloud near this height range (vectorized)
+            current_cloud_points_np = cloud.points
+            if current_cloud_points_np.size == 0: # Should be caught by initial validation
+                query_points_in_range = np.array([])
+            else:
+                mask_z_range = (current_cloud_points_np[:, 2] >= z_min_search) & (current_cloud_points_np[:, 2] <= z_max_search)
+                query_points_in_range = current_cloud_points_np[mask_z_range]
             
             # Cyclic boundary handling
-            if len(query_points) > 0:
+            if query_points_in_range.shape[0] > 0:
                 # Create extended query points with domain boundary wrapping
-                extended_query_points = list(query_points)
+                # extended_query_points = list(query_points_in_range) # OLD
                 
-                # Wrap points near domain boundaries
-                for pt in query_points:
-                    x, y, cz = pt
-                    
-                    # Wrap points near x-boundaries
-                    if x < self.xt[0] + horizontal_threshold:
-                        extended_query_points.append([x + self.domain_size_x, y, cz])
-                    elif x > self.xt[-1] - horizontal_threshold:
-                        extended_query_points.append([x - self.domain_size_x, y, cz])
-                    
-                    # Wrap points near y-boundaries
-                    if y < self.yt[0] + horizontal_threshold:
-                        extended_query_points.append([x, y + self.domain_size_y, cz])
-                    elif y > self.yt[-1] - horizontal_threshold:
-                        extended_query_points.append([x, y - self.domain_size_y, cz])
-                    
-                    # Handle corner cases (diagonal wrapping)
-                    if x < self.xt[0] + horizontal_threshold and y < self.yt[0] + horizontal_threshold:
-                        extended_query_points.append([x + self.domain_size_x, y + self.domain_size_y, cz])
-                    if x < self.xt[0] + horizontal_threshold and y > self.yt[-1] - horizontal_threshold:
-                        extended_query_points.append([x + self.domain_size_x, y - self.domain_size_y, cz])
-                    if x > self.xt[-1] - horizontal_threshold and y < self.yt[0] + horizontal_threshold:
-                        extended_query_points.append([x - self.domain_size_x, y + self.domain_size_y, cz])
-                    if x > self.xt[-1] - horizontal_threshold and y > self.yt[-1] - horizontal_threshold:
-                        extended_query_points.append([x - self.domain_size_x, y - self.domain_size_y, cz])
+                # # Wrap points near domain boundaries # OLD
+                # for pt in query_points_in_range: # OLD
+                #     x_qp, y_qp, cz_qp = pt # OLD
+                # ... (rest of the old manual wrapping)
+
+                # NEW Vectorized approach for extending query points:
+                points_to_extend_list = [query_points_in_range]
+                x_coords_qp, y_coords_qp, z_coords_qp = query_points_in_range[:, 0], query_points_in_range[:, 1], query_points_in_range[:, 2]
+
+                # X-wrapping
+                wrap_x_right_edge_mask = x_coords_qp < self.xt[0] + horizontal_threshold # Points near left edge, wrap to right
+                wrap_x_left_edge_mask = x_coords_qp > self.xt[-1] - horizontal_threshold # Points near right edge, wrap to left
                 
-                # Convert to numpy array
-                extended_query_points = np.array(extended_query_points)
+                if np.any(wrap_x_right_edge_mask):
+                    points_to_extend_list.append(np.column_stack((x_coords_qp[wrap_x_right_edge_mask] + self.domain_size_x, y_coords_qp[wrap_x_right_edge_mask], z_coords_qp[wrap_x_right_edge_mask])))
+                if np.any(wrap_x_left_edge_mask):
+                    points_to_extend_list.append(np.column_stack((x_coords_qp[wrap_x_left_edge_mask] - self.domain_size_x, y_coords_qp[wrap_x_left_edge_mask], z_coords_qp[wrap_x_left_edge_mask])))
+
+                # Y-wrapping
+                wrap_y_bottom_edge_mask = y_coords_qp < self.yt[0] + horizontal_threshold # Points near top edge, wrap to bottom
+                wrap_y_top_edge_mask = y_coords_qp > self.yt[-1] - horizontal_threshold # Points near bottom edge, wrap to top
+
+                if np.any(wrap_y_bottom_edge_mask):
+                    points_to_extend_list.append(np.column_stack((x_coords_qp[wrap_y_bottom_edge_mask], y_coords_qp[wrap_y_bottom_edge_mask] + self.domain_size_y, z_coords_qp[wrap_y_bottom_edge_mask])))
+                if np.any(wrap_y_top_edge_mask):
+                    points_to_extend_list.append(np.column_stack((x_coords_qp[wrap_y_top_edge_mask], y_coords_qp[wrap_y_top_edge_mask] - self.domain_size_y, z_coords_qp[wrap_y_top_edge_mask])))
                 
+                # Corner wrapping (XY)
+                # Near top-left (xt[0], yt[0]), wrap to (+domain_size_x, +domain_size_y)
+                wrap_tl_mask = wrap_x_right_edge_mask & wrap_y_bottom_edge_mask
+                if np.any(wrap_tl_mask):
+                    points_to_extend_list.append(np.column_stack((x_coords_qp[wrap_tl_mask] + self.domain_size_x, y_coords_qp[wrap_tl_mask] + self.domain_size_y, z_coords_qp[wrap_tl_mask])))
+                # Near bottom-left (xt[0], yt[-1]), wrap to (+domain_size_x, -domain_size_y)
+                wrap_bl_mask = wrap_x_right_edge_mask & wrap_y_top_edge_mask
+                if np.any(wrap_bl_mask):
+                    points_to_extend_list.append(np.column_stack((x_coords_qp[wrap_bl_mask] + self.domain_size_x, y_coords_qp[wrap_bl_mask] - self.domain_size_y, z_coords_qp[wrap_bl_mask])))
+                # Near top-right (xt[-1], yt[0]), wrap to (-domain_size_x, +domain_size_y)
+                wrap_tr_mask = wrap_x_left_edge_mask & wrap_y_bottom_edge_mask
+                if np.any(wrap_tr_mask):
+                    points_to_extend_list.append(np.column_stack((x_coords_qp[wrap_tr_mask] - self.domain_size_x, y_coords_qp[wrap_tr_mask] + self.domain_size_y, z_coords_qp[wrap_tr_mask])))
+                # Near bottom-right (xt[-1], yt[-1]), wrap to (-domain_size_x, -domain_size_y)
+                wrap_br_mask = wrap_x_left_edge_mask & wrap_y_top_edge_mask
+                if np.any(wrap_br_mask):
+                    points_to_extend_list.append(np.column_stack((x_coords_qp[wrap_br_mask] - self.domain_size_x, y_coords_qp[wrap_br_mask] - self.domain_size_y, z_coords_qp[wrap_br_mask])))
+                
+                extended_query_points = np.vstack(points_to_extend_list) if len(points_to_extend_list) > 1 else query_points_in_range
+
                 # Check if standard matching would work (no boundary crossing)
-                distances_orig, _ = tree.query(query_points, k=1)
+                # Query with original points in range to see if a non-boundary match exists
+                distances_orig, _ = tree.query(query_points_in_range, k=1, distance_upper_bound=horizontal_threshold + 1e-9) # Add epsilon for strict inequality
                 orig_match = np.any(distances_orig <= horizontal_threshold)
                 
-                # Check if extended matching would work
-                distances, _ = tree.query(extended_query_points, k=1)
-                extended_match = np.any(distances <= horizontal_threshold)
+                # Check if extended matching would work (includes boundary crossing)
+                # Query with all extended points
+                distances_extended, _ = tree.query(extended_query_points, k=1, distance_upper_bound=horizontal_threshold + 1e-9)
+                extended_match = np.any(distances_extended <= horizontal_threshold)
                 
                 # Detect pure boundary crossing (matches only with wrapped points)
                 if extended_match and not orig_match:
-                    found_boundary_crossing = True
+                    found_boundary_crossing = True # Set flag for potential logging
                     print(f"BOUNDARY CROSSING DETECTED! Track: {last_cloud_in_track.cloud_id}, Cloud: {cloud.cloud_id}")
                     print(f"  Horizontal threshold: {horizontal_threshold}")
                     print(f"  Domain size: {self.domain_size_x} x {self.domain_size_y}")
-                    print(f"  Cloud points near boundary: {len(extended_query_points) - len(query_points)}")
+                    print(f"  Cloud points near boundary: {len(extended_query_points) - len(query_points_in_range)}")
                     
                     # Additional debug information
                     if hasattr(cloud, 'location') and hasattr(last_cloud_in_track, 'location'):
@@ -307,9 +343,9 @@ class CloudTracker:
                 
                 # Return True if we find any match (boundary crossing or normal)
                 if extended_match:
-                    return True
+                    return True # Match found for this z-level, so clouds match
     
-        return False
+        return False # No match found across all z-levels
 
         # Visualize the points for background drift trabnslation (belongs to is_match function)
         # expected_last_cloud_points = {(x + dx, y + dy, z) for x, y, z in last_cloud_in_track.points}

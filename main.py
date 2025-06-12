@@ -30,8 +30,8 @@ config = {
     'timestep_duration': 180,  # Duration between LBA timesteps in seconds
     'distance_threshold': 0,
     'plot_switch': False,
-    # 'v_drift': -4.0, # Remove or set to 0 if not applicable/known for LBA
-    # 'u_drift': -5.0, # Remove or set to 0 if not applicable/known for LBA
+    'v_drift': 0.0, # Remove or set to 0 if not applicable/known for LBA
+    'u_drift': 0.0, # Remove or set to 0 if not applicable/known for LBA
     'horizontal_resolution': 200.0, # m, taken from namelist - VERIFY FOR LBA
     'switch_background_drift': False,
     'switch_wind_drift': True,

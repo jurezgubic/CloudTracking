@@ -193,12 +193,12 @@ class CloudField:
                         continue
                     
                     # Create points array more efficiently
-                    points = np.column_stack([
+                    points_np = np.column_stack([ # Renamed to points_np for clarity
                         xt[point_indices[:, 2]],
                         yt[point_indices[:, 1]],
                         zt[point_indices[:, 0]]
                     ])
-                    points = [tuple(p) for p in points]  # Convert to list of tuples
+                    # points = [tuple(p) for p in points]  # OLD: Convert to list of tuples # ToDo (optimisation)
                     
                     # Extract data using vectorized operations
                     w_values = w_data[point_indices[:, 0], point_indices[:, 1], point_indices[:, 2]]
@@ -294,7 +294,7 @@ class CloudField:
                         size=region.area,
                         surface_area=surface_area,
                         location=(region.centroid[2], region.centroid[1], region.centroid[0]),
-                        points=points,
+                        points=points_np, # MODIFIED: Pass NumPy array directly
                         max_height=max_height,
                         max_w=max_w,
                         max_w_cloud_base=max_w_cloud_base,
