@@ -7,6 +7,7 @@ class Cloud:
                  cloud_base_area, 
                  location, 
                  points, 
+                 surface_points,
                  timestep, 
                  max_height, 
                  max_w, 
@@ -28,6 +29,7 @@ class Cloud:
         self.cloud_base_area = cloud_base_area
         self.location = location
         self.points = points
+        self.surface_points = surface_points
         self.timestep = timestep
         self.max_height = max_height
         self.max_w = max_w

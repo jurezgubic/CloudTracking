@@ -15,33 +15,25 @@ class CloudTracker:
         self.mean_w = None  # Add mean vertical velocity
         self.zt = None
 
-    def drift_translation_calculation(self):
-        """ Calculate drift translation based on the namelist drift values. """
-        if self.config['switch_background_drift'] == True:
-            dx = int(self.config['u_drift'] * self.config['timestep_duration']) # Drift in x-direction
-            dy = int(self.config['v_drift'] * self.config['timestep_duration']) # Drift in y-direction
-        else:
-            dx = dy = 0
-        return dx, dy
-
-
-    def wind_drift_calculation(self, cz):
+    def wind_drift_calculation(self, cz_array):
         """ Calculate wind drift based on the height of the cloud point using pre-loaded mean wind data. """
-        if self.config['switch_wind_drift'] == True:
-            z_index = np.argmin(np.abs(self.zt - cz))  # Find nearest z-level index
-            wind_dx = self.mean_u[z_index] * self.config['timestep_duration'] # Wind drift in x-direction
-            wind_dy = self.mean_v[z_index] * self.config['timestep_duration'] # Wind drift in y-direction
+        if self.config['switch_wind_drift'] and self.mean_u is not None and self.mean_v is not None:
+            # Find nearest z-level indices for an array of z coordinates
+            z_indices = np.argmin(np.abs(self.zt[:, np.newaxis] - cz_array), axis=0)
+            wind_dx = self.mean_u[z_indices] * self.config['timestep_duration'] # Wind drift in x-direction
+            wind_dy = self.mean_v[z_indices] * self.config['timestep_duration'] # Wind drift in y-direction
         else:
-            wind_dx = wind_dy = 0
+            wind_dx = wind_dy = np.zeros_like(cz_array, dtype=float)
         return wind_dx, wind_dy
 
-    def vertical_drift_calculation(self, cz):
+    def vertical_drift_calculation(self, cz_array):
         """Calculate vertical drift based on the height of the cloud point using pre-loaded mean vertical velocity data."""
-        if self.config.get('switch_vertical_drift', True):  # Default to True if not specified
-            z_index = np.argmin(np.abs(self.zt - cz))  # Find nearest z-level index
-            vert_dz = self.mean_w[z_index] * self.config['timestep_duration']  # Vertical drift
+        if self.config.get('switch_vertical_drift', True) and self.mean_w is not None:  # Default to True if not specified
+            # Find nearest z-level indices for an array of z coordinates
+            z_indices = np.argmin(np.abs(self.zt[:, np.newaxis] - cz_array), axis=0)
+            vert_dz = self.mean_w[z_indices] * self.config['timestep_duration']  # Vertical drift
         else:
-            vert_dz = 0
+            vert_dz = np.zeros_like(cz_array, dtype=float)
         return vert_dz
 
     def update_tracks(self, current_cloud_field, mean_u, mean_v, mean_w, zt, xt, yt):
@@ -154,6 +146,8 @@ class CloudTracker:
                     # Start a new track
                     self.cloud_tracks[cloud_id] = [cloud]
 
+    # This function is deprecated by the more complex logic in update_tracks
+    # but is kept here for reference or simpler tracking scenarios.
     def match_clouds(self, current_cloud_field):
         """ Match clouds from the current cloud field to the existing tracks. """
         matched_clouds = set()
@@ -175,149 +169,80 @@ class CloudTracker:
 
     # @profile
     def is_match(self, cloud, last_cloud_in_track):
-        """Check if the cloud is a match using dynamic thresholds based on maximum velocities."""
-        # First, check if the last cloud is still active
-        if not last_cloud_in_track.is_active:
+        """
+        Checks if a cloud in the current timestep matches a cloud from the previous timestep
+        by searching for overlapping SURFACE points within a cylindrical volume.
+        """
+        # --- 1. Validation and Threshold Calculation ---
+        # Use surface_points for validation. .any() is needed for numpy arrays.
+        if not last_cloud_in_track.is_active or not cloud.surface_points.any() or not last_cloud_in_track.surface_points.any():
             return False
-        
-        # Basic validation
-        if not cloud.points or not last_cloud_in_track.points:
-            return False
-            
-        # Calculate horizontal drift
-        dx, dy = self.drift_translation_calculation()
-        
-        # Calculate dynamic thresholds based on maximum velocities
+
         timestep_duration = self.config['timestep_duration']
-        safety_factor = 1.5  # Buffer for turbulence and numerical effects
-        
-        # Find maximum velocities (get absolute max values)
+        safety_factor = 2.0
+
         if self.mean_u is not None and self.mean_v is not None and self.mean_w is not None:
-            max_u = np.max(np.abs(self.mean_u)) * timestep_duration * safety_factor
-            max_v = np.max(np.abs(self.mean_v)) * timestep_duration * safety_factor
-            max_w = np.max(np.abs(self.mean_w)) * timestep_duration * safety_factor
+            max_u_abs = np.max(np.abs(self.mean_u))
+            max_v_abs = np.max(np.abs(self.mean_v))
+            max_w_abs = np.max(np.abs(self.mean_w))
             
-            # Set minimum thresholds in case velocities are very small
-            horizontal_threshold = max(max(max_u, max_v), self.config['horizontal_resolution'])
-            vertical_threshold = max(max_w, self.config['horizontal_resolution'] * 2)
+            horizontal_threshold = max(max(max_u_abs, max_v_abs) * timestep_duration * safety_factor, self.config['horizontal_resolution'])
+            vertical_threshold = max(max_w_abs * timestep_duration * safety_factor, self.config['horizontal_resolution'])
         else:
-            # Fallback to config values if mean velocities aren't available
-            horizontal_threshold = self.config['horizontal_resolution']
-            vertical_threshold = self.config['horizontal_resolution'] * 3
+            horizontal_threshold = self.config['horizontal_resolution'] * 2
+            vertical_threshold = self.config['horizontal_resolution']
+
+        # --- 2. Prepare Point Sets and Apply Drift (Vectorized) ---
+        # Use the much smaller set of surface_points for matching
+        current_points = cloud.surface_points
+        last_points = last_cloud_in_track.surface_points
+
+        # Calculate wind and vertical drift for all points at once
+        wind_dx, wind_dy = self.wind_drift_calculation(last_points[:, 2])
+        vert_dz = self.vertical_drift_calculation(last_points[:, 2])
         
-        # Group points by height for wind drift calculation
-        height_to_points = {}
-        for x, y, z in last_cloud_in_track.points:
-            if z not in height_to_points:
-                height_to_points[z] = []
-            height_to_points[z].append((x, y, z))
+        # Apply total drift to get the expected position of the previous cloud's points
+        adjusted_points = np.copy(last_points)
+        adjusted_points[:, 0] += wind_dx
+        adjusted_points[:, 1] += wind_dy
+        adjusted_points[:, 2] += vert_dz
 
-        # Track if we find any boundary crossing match
-        found_boundary_crossing = False
+        # --- 3. Build 2D KD-Tree for Horizontal Search ---
+        # ToDo (optimisation): For better performance, build one KD-tree for the entire 
+        # current_cloud_field and query it for each track, rather than building a tree for each potential match.
+        tree_current_2d = cKDTree(current_points[:, :2]) # Use only X, Y coordinates
 
-        # Create a KD-tree for each height level with 3D drift
-        for z, points in height_to_points.items():
-            # Calculate wind drift for this height
-            wind_dx, wind_dy = self.wind_drift_calculation(z)
-            vert_dz = self.vertical_drift_calculation(z)  # Calculate vertical drift
-            
-            adjusted_dx = dx + wind_dx
-            adjusted_dy = dy + wind_dy
-            adjusted_dz = vert_dz  # Vertical displacement
-            
-            # Apply drift to points in 3D
-            adjusted_points = np.array([(x + adjusted_dx, y + adjusted_dy, z + adjusted_dz) for x, y, z in points])
-            
-            # Build KD-tree with 3D points
-            tree = cKDTree(adjusted_points)
-            
-            # Define vertical search range based on the dynamic vertical threshold
-            z_min = z - vertical_threshold
-            z_max = z + vertical_threshold + adjusted_dz
-            
-            # Get 3D query points from current cloud near this height
-            query_points = np.array([(x, y, cz) for x, y, cz in cloud.points 
-                                   if z_min <= cz <= z_max])
-            
-            # Cyclic boundary handling
-            if len(query_points) > 0:
-                # Create extended query points with domain boundary wrapping
-                extended_query_points = list(query_points)
-                
-                # Wrap points near domain boundaries
-                for pt in query_points:
-                    x, y, cz = pt
-                    
-                    # Wrap points near x-boundaries
-                    if x < self.xt[0] + horizontal_threshold:
-                        extended_query_points.append([x + self.domain_size_x, y, cz])
-                    elif x > self.xt[-1] - horizontal_threshold:
-                        extended_query_points.append([x - self.domain_size_x, y, cz])
-                    
-                    # Wrap points near y-boundaries
-                    if y < self.yt[0] + horizontal_threshold:
-                        extended_query_points.append([x, y + self.domain_size_y, cz])
-                    elif y > self.yt[-1] - horizontal_threshold:
-                        extended_query_points.append([x, y - self.domain_size_y, cz])
-                    
-                    # Handle corner cases (diagonal wrapping)
-                    if x < self.xt[0] + horizontal_threshold and y < self.yt[0] + horizontal_threshold:
-                        extended_query_points.append([x + self.domain_size_x, y + self.domain_size_y, cz])
-                    if x < self.xt[0] + horizontal_threshold and y > self.yt[-1] - horizontal_threshold:
-                        extended_query_points.append([x + self.domain_size_x, y - self.domain_size_y, cz])
-                    if x > self.xt[-1] - horizontal_threshold and y < self.yt[0] + horizontal_threshold:
-                        extended_query_points.append([x - self.domain_size_x, y + self.domain_size_y, cz])
-                    if x > self.xt[-1] - horizontal_threshold and y > self.yt[-1] - horizontal_threshold:
-                        extended_query_points.append([x - self.domain_size_x, y - self.domain_size_y, cz])
-                
-                # Convert to numpy array
-                extended_query_points = np.array(extended_query_points)
-                
-                # Check if standard matching would work (no boundary crossing)
-                distances_orig, _ = tree.query(query_points, k=1)
-                orig_match = np.any(distances_orig <= horizontal_threshold)
-                
-                # Check if extended matching would work
-                distances, _ = tree.query(extended_query_points, k=1)
-                extended_match = np.any(distances <= horizontal_threshold)
-                
-                # Detect pure boundary crossing (matches only with wrapped points)
-                if extended_match and not orig_match:
-                    found_boundary_crossing = True
-                    print(f"BOUNDARY CROSSING DETECTED! Track: {last_cloud_in_track.cloud_id}, Cloud: {cloud.cloud_id}")
-                    print(f"  Horizontal threshold: {horizontal_threshold}")
-                    print(f"  Domain size: {self.domain_size_x} x {self.domain_size_y}")
-                    print(f"  Cloud points near boundary: {len(extended_query_points) - len(query_points)}")
-                    
-                    # Additional debug information
-                    if hasattr(cloud, 'location') and hasattr(last_cloud_in_track, 'location'):
-                        print(f"  Current cloud location: {cloud.location}")
-                        print(f"  Previous cloud location: {last_cloud_in_track.location}")
-                        
-                        # Calculate expected location with drift
-                        expected_x = last_cloud_in_track.location[0] + adjusted_dx
-                        expected_y = last_cloud_in_track.location[1] + adjusted_dy
-                        print(f"  Expected location with drift: ({expected_x}, {expected_y})")
-                        
-                        # Check which boundary was crossed
-                        if abs(cloud.location[0] - expected_x) > self.domain_size_x/2:
-                            print(f"  X-boundary crossed (E-W)")
-                        if abs(cloud.location[1] - expected_y) > self.domain_size_y/2:
-                            print(f"  Y-boundary crossed (N-S)")
-                
-                # Return True if we find any match (boundary crossing or normal)
-                if extended_match:
-                    return True
-    
-        return False
+        # --- 4. Handle Cyclic Boundaries (Vectorized) ---
+        points_to_query = [adjusted_points]
+        # Check and append points for each boundary crossing scenario
+        if np.any(adjusted_points[:, 0] < self.xt[0] + horizontal_threshold):
+            points_to_query.append(adjusted_points + [self.domain_size_x, 0, 0])
+        if np.any(adjusted_points[:, 0] > self.xt[-1] - horizontal_threshold):
+            points_to_query.append(adjusted_points - [self.domain_size_x, 0, 0])
+        if np.any(adjusted_points[:, 1] < self.yt[0] + horizontal_threshold):
+            points_to_query.append(adjusted_points + [0, self.domain_size_y, 0])
+        if np.any(adjusted_points[:, 1] > self.yt[-1] - horizontal_threshold):
+            points_to_query.append(adjusted_points - [0, self.domain_size_y, 0])
+        
+        all_query_points = np.vstack(points_to_query)
 
-        # Visualize the points for background drift trabnslation (belongs to is_match function)
-        # expected_last_cloud_points = {(x + dx, y + dy, z) for x, y, z in last_cloud_in_track.points}
-        # current_cloud_points = set(cloud.points)
-        # last_cloud_points = set(last_cloud_in_track.points)
-        #plotting_utils.visualize_points(last_cloud_points, expected_last_cloud_points, current_cloud_points)
-        #plotting_utils.visualize_points_plotly(last_cloud_points,expected_last_cloud_points,current_cloud_points)
+        # --- 5. Perform Cylindrical Search ---
+        # Find all pairs of points that are within the HORIZONTAL threshold using the 2D tree.
+        nearby_indices_list = tree_current_2d.query_ball_point(all_query_points[:, :2], r=horizontal_threshold)
 
+        # --- 6. Check Vertical Proximity for Horizontal Matches ---
+        for i, current_point_indices in enumerate(nearby_indices_list):
+            if not current_point_indices:  # No horizontal matches for this point.
+                continue
+
+            last_z = all_query_points[i, 2]
+            current_z_values = current_points[current_point_indices, 2];
+
+            # Check if the absolute vertical distance is within the threshold for ANY of the pairs.
+            if np.any(np.abs(current_z_values - last_z) <= vertical_threshold):
+                return True  # Found a valid match.
+
+        return False # No match found.
 
     def get_tracks(self):
         return self.cloud_tracks

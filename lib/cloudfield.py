@@ -2,7 +2,7 @@ import numpy as np
 import gc
 from skimage import measure
 from memory_profiler import profile
-from scipy.ndimage import binary_dilation
+from scipy.ndimage import binary_dilation, binary_erosion, generate_binary_structure
 from utils.plotting_utils import plot_labeled_regions
 from lib.cloud import Cloud
 import utils.constants as const
@@ -168,6 +168,9 @@ class CloudField:
         # Calculate horizontal_resolution_squared once
         horizontal_resolution_squared = config['horizontal_resolution']**2
         
+        # Define a 3D connectivity structure for erosion, used to find surface points
+        erosion_structure = generate_binary_structure(3, 3)
+
         # Create Cloud objects in batches to manage memory
         clouds = {}
         batch_size = 50  # Process 50 clouds at a time
@@ -188,6 +191,13 @@ class CloudField:
                     cloud_mask = updated_labeled_array == region.label
                     point_indices = np.argwhere(cloud_mask)
                     
+                    # --- Surface Point Calculation ---
+                    # Erode the mask to find the "inner" points.
+                    inner_mask = binary_erosion(cloud_mask, structure=erosion_structure)
+                    # The surface is the original mask minus the inner part.
+                    surface_mask = cloud_mask & ~inner_mask
+                    surface_point_indices = np.argwhere(surface_mask)
+
                     # Skip if no points (shouldn't happen but just in case)
                     if len(point_indices) == 0:
                         continue
@@ -198,8 +208,17 @@ class CloudField:
                         yt[point_indices[:, 1]],
                         zt[point_indices[:, 0]]
                     ])
-                    points = [tuple(p) for p in points]  # Convert to list of tuples
                     
+                    surface_points = np.column_stack([
+                        xt[surface_point_indices[:, 2]],
+                        yt[surface_point_indices[:, 1]],
+                        zt[surface_point_indices[:, 0]]
+                    ])
+
+                    # ToDo (optimisation): The conversion to a list of tuples is slow and should be removed
+                    # if downstream code can handle numpy arrays directly.
+                    points_as_tuples = [tuple(p) for p in points]
+
                     # Extract data using vectorized operations
                     w_values = w_data[point_indices[:, 0], point_indices[:, 1], point_indices[:, 2]]
                     l_values = l_data[point_indices[:, 0], point_indices[:, 1], point_indices[:, 2]]
@@ -293,8 +312,9 @@ class CloudField:
                         cloud_id=cloud_id,
                         size=region.area,
                         surface_area=surface_area,
-                        location=(region.centroid[2], region.centroid[1], region.centroid[0]),
-                        points=points,
+                        location=(xt[int(region.centroid[2])], yt[int(region.centroid[1])], zt[int(region.centroid[0])]),
+                        points=points_as_tuples,
+                        surface_points=surface_points,
                         max_height=max_height,
                         max_w=max_w,
                         max_w_cloud_base=max_w_cloud_base,

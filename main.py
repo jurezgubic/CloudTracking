@@ -27,21 +27,18 @@ file_name = {
 output_netcdf_path = 'cloud_results.nc'
 
 # Set number of timesteps to process
-total_timesteps = 15
+total_timesteps = 5
 
 # Set configuration parameters
 config = {
     'min_size': 10,  # Minimum size of cloud objects to be considered
-    'l_condition': 0.001, # kg/kg. Minimum threshold for liquid water
+    'l_condition': 0.0005, # kg/kg. Minimum threshold for liquid water
     'w_condition': 0.0,  # m/s. Minimum condition for vertical velocity
     'w_switch': False,  # True if you want to use vertical velocity threshold
     'timestep_duration': 60,  # Duration between timesteps in seconds
     'distance_threshold': 0, # Max dist between merging clouds across boundary
     'plot_switch': False, # Plot cloud field at each timestep
-    'v_drift': -4.0, # -4. m/s, taken from RICO namelist
-    'u_drift': -5.0, # -5. m/s, taken from RICO namelist
     'horizontal_resolution': 25.0, # m, taken from namelist
-    'switch_background_drift': False, # True if you want to subtract the background drift
     'switch_wind_drift': True, # True if you want to subtract the wind drift
     'switch_vertical_drift': True,  # Enable vertical drift consideration
     'cloud_base_altitude': 700, # m, from input data analysis
