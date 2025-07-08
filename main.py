@@ -27,12 +27,12 @@ file_name = {
 output_netcdf_path = 'cloud_results.nc'
 
 # Set number of timesteps to process
-total_timesteps = 7
+total_timesteps = 10
 
 # Set configuration parameters
 config = {
     'min_size': 10,  # Minimum size of cloud objects to be considered
-    'l_condition': 0.0009, # kg/kg. Minimum threshold for liquid water
+    'l_condition': 0.00001, # kg/kg. Minimum threshold for liquid water
     'w_condition': 0.0,  # m/s. Minimum condition for vertical velocity
     'w_switch': False,  # True if you want to use vertical velocity threshold
     'timestep_duration': 60,  # Duration between timesteps in seconds
@@ -66,12 +66,13 @@ def process_clouds(cloud_tracker):
         # Load cloud field for the current timestep
         cloud_field = data_management.load_cloud_field_from_file(base_file_path, file_name, timestep, config)
 
-        # Calculate mean velocities for the current timestep
-        mean_u, mean_v = calculate_mean_velocities(base_file_path, file_name, timestep)
-        mean_w = calculate_mean_vertical_velocity(base_file_path, file_name, timestep)
+        # The domain-wide mean velocities are no longer needed for tracking,
+        # as the logic now uses each cloud's internal velocity.
+        # mean_u, mean_v = calculate_mean_velocities(base_file_path, file_name, timestep)
+        # mean_w = calculate_mean_vertical_velocity(base_file_path, file_name, timestep)
 
         # Track clouds across timesteps
-        cloud_tracker.update_tracks(cloud_field, mean_u, mean_v, mean_w, 
+        cloud_tracker.update_tracks(cloud_field,
                                    cloud_field.zt, cloud_field.xt, cloud_field.yt)
 
         # Special handling for each timestep:

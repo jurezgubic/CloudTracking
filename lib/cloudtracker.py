@@ -10,44 +10,22 @@ class CloudTracker:
     def __init__(self, config):
         self.cloud_tracks = {}
         self.config = config
-        self.mean_u = None
-        self.mean_v = None
-        self.mean_w = None  # Add mean vertical velocity
         self.zt = None
+        self.xt = None
+        self.yt = None
+        self.domain_size_x = None
+        self.domain_size_y = None
 
-    def wind_drift_calculation(self, cz_array):
-        """ Calculate wind drift based on the height of the cloud point using pre-loaded mean wind data. """
-        if self.config['switch_wind_drift'] and self.mean_u is not None and self.mean_v is not None:
-            # Find nearest z-level indices for an array of z coordinates
-            z_indices = np.argmin(np.abs(self.zt[:, np.newaxis] - cz_array), axis=0)
-            wind_dx = self.mean_u[z_indices] * self.config['timestep_duration'] # Wind drift in x-direction
-            wind_dy = self.mean_v[z_indices] * self.config['timestep_duration'] # Wind drift in y-direction
-        else:
-            wind_dx = wind_dy = np.zeros_like(cz_array, dtype=float)
-        return wind_dx, wind_dy
-
-    def vertical_drift_calculation(self, cz_array):
-        """Calculate vertical drift based on the height of the cloud point using pre-loaded mean vertical velocity data."""
-        if self.config.get('switch_vertical_drift', True) and self.mean_w is not None:  # Default to True if not specified
-            # Find nearest z-level indices for an array of z coordinates
-            z_indices = np.argmin(np.abs(self.zt[:, np.newaxis] - cz_array), axis=0)
-            vert_dz = self.mean_w[z_indices] * self.config['timestep_duration']  # Vertical drift
-        else:
-            vert_dz = np.zeros_like(cz_array, dtype=float)
-        return vert_dz
-
-    def update_tracks(self, current_cloud_field, mean_u, mean_v, mean_w, zt, xt, yt):
+    def update_tracks(self, current_cloud_field, zt, xt, yt):
         """Update the cloud tracks with the current cloud field."""
-        self.mean_u = mean_u
-        self.mean_v = mean_v
-        self.mean_w = mean_w
         self.zt = zt
         self.xt = xt
         self.yt = yt
         
         # Calculate domain dimensions (for use in boundary handling)
-        self.domain_size_x = (self.xt[-1] - self.xt[0]) + self.config['horizontal_resolution']
-        self.domain_size_y = (self.yt[-1] - self.yt[0]) + self.config['horizontal_resolution']
+        if self.domain_size_x is None:
+            self.domain_size_x = (self.xt[-1] - self.xt[0]) + self.config['horizontal_resolution']
+            self.domain_size_y = (self.yt[-1] - self.yt[0]) + self.config['horizontal_resolution']
         
         new_matched_clouds = set()
         
@@ -174,23 +152,28 @@ class CloudTracker:
         by searching for overlapping SURFACE points within a cylindrical volume.
         """
         # --- 1. Validation and Threshold Calculation ---
-        # Use surface_points for validation. .any() is needed for numpy arrays.
         if not last_cloud_in_track.is_active or not cloud.surface_points.any() or not last_cloud_in_track.surface_points.any():
             return False
 
         timestep_duration = self.config['timestep_duration']
+        
+        # Physics: The safety factor creates a buffer around the predicted location.
+        # It accounts for the cloud's acceleration/deceleration between timesteps.
         safety_factor = 2.0
 
-        if self.mean_u is not None and self.mean_v is not None and self.mean_w is not None:
-            max_u_abs = np.max(np.abs(self.mean_u))
-            max_v_abs = np.max(np.abs(self.mean_v))
-            max_w_abs = np.max(np.abs(self.mean_w))
-            
-            horizontal_threshold = max(max(max_u_abs, max_v_abs) * timestep_duration * safety_factor, self.config['horizontal_resolution'])
-            vertical_threshold = max(max_w_abs * timestep_duration * safety_factor, self.config['horizontal_resolution'])
-        else:
-            horizontal_threshold = self.config['horizontal_resolution'] * 2
-            vertical_threshold = self.config['horizontal_resolution']
+        # --- Physics: Calculate a dynamic search radius based on the cloud's OWN velocity. ---
+        # This ensures the search area is proportional to the cloud's specific momentum.
+        # A cloud with high velocity will have a larger search radius.
+        u_abs = abs(last_cloud_in_track.mean_u)
+        v_abs = abs(last_cloud_in_track.mean_v)
+        w_abs = abs(last_cloud_in_track.mean_w)
+
+        horizontal_threshold = max(u_abs, v_abs) * timestep_duration * safety_factor
+        vertical_threshold = w_abs * timestep_duration * safety_factor
+        
+        # Ensure the threshold is at least one grid cell to handle stationary clouds.
+        horizontal_threshold = max(horizontal_threshold, self.config['horizontal_resolution'])
+        vertical_threshold = max(vertical_threshold, self.config['horizontal_resolution'])
 
         # --- 2. Prepare Point Sets and Apply Drift (Vectorized) ---
         # Use the much smaller set of surface_points for matching
