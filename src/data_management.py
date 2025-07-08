@@ -24,6 +24,12 @@ def load_cloud_field_from_file(file_path, file_names, timestep, config):
     with Dataset(f"{file_path}{file_names['l']}", 'r') as dataset:
         l_data = dataset.variables['l'][timestep, :, :, :]
     
+    with Dataset(f"{file_path}{file_names['u']}", 'r') as dataset:
+        u_data = dataset.variables['u'][timestep, :, :, :]
+
+    with Dataset(f"{file_path}{file_names['v']}", 'r') as dataset:
+        v_data = dataset.variables['v'][timestep, :, :, :]
+
     with Dataset(f"{file_path}{file_names['p']}", 'r') as dataset:
         p_data = dataset.variables['p'][timestep, :, :, :]
     
@@ -38,10 +44,10 @@ def load_cloud_field_from_file(file_path, file_names, timestep, config):
         w_data = dataset.variables['w'][timestep, :, :, :]
     
     # Create a CloudField object
-    cloud_field = CloudField(l_data, w_data, p_data, theta_l_data, q_t_data, timestep, config, xt, yt, zt)
+    cloud_field = CloudField(l_data, u_data, v_data, w_data, p_data, theta_l_data, q_t_data, timestep, config, xt, yt, zt)
     
     # Explicitly clear variables to help garbage collection
-    del l_data, p_data, theta_l_data, q_t_data, w_data
+    del l_data, u_data, v_data, p_data, theta_l_data, q_t_data, w_data
     
     gc.collect()  # Force garbage collection
     

@@ -12,6 +12,9 @@ class Cloud:
                  max_height, 
                  max_w, 
                  max_w_cloud_base, 
+                 mean_u,
+                 mean_v,
+                 mean_w,
                  ql_flux, 
                  mass_flux, 
                  mass_flux_per_level, 
@@ -34,6 +37,9 @@ class Cloud:
         self.max_height = max_height
         self.max_w = max_w
         self.max_w_cloud_base = max_w_cloud_base
+        self.mean_u = mean_u
+        self.mean_v = mean_v
+        self.mean_w = mean_w
         self.ql_flux = ql_flux
         self.mass_flux = mass_flux
         self.mass_flux_per_level = mass_flux_per_level

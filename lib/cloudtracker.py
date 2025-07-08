@@ -197,15 +197,16 @@ class CloudTracker:
         current_points = cloud.surface_points
         last_points = last_cloud_in_track.surface_points
 
-        # Calculate wind and vertical drift for all points at once
-        wind_dx, wind_dy = self.wind_drift_calculation(last_points[:, 2])
-        vert_dz = self.vertical_drift_calculation(last_points[:, 2])
+        # --- Physics: Advect the previous cloud using its own internal mean velocity ---
+        # This is a more accurate physical model than using the environmental mean,
+        # as it accounts for the cloud's own momentum.
+        dx = last_cloud_in_track.mean_u * timestep_duration
+        dy = last_cloud_in_track.mean_v * timestep_duration
+        dz = last_cloud_in_track.mean_w * timestep_duration
         
         # Apply total drift to get the expected position of the previous cloud's points
-        adjusted_points = np.copy(last_points)
-        adjusted_points[:, 0] += wind_dx
-        adjusted_points[:, 1] += wind_dy
-        adjusted_points[:, 2] += vert_dz
+        # Note: np.copy is not needed here as addition creates a new array.
+        adjusted_points = last_points + [dx, dy, dz]
 
         # --- 3. Build 2D KD-Tree for Horizontal Search ---
         # ToDo (optimisation): For better performance, build one KD-tree for the entire 

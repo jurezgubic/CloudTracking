@@ -10,7 +10,7 @@ from utils.physics import calculate_physics_variables  # Import the Numba-accele
 
 class CloudField:
     """Class to identify and track clouds in a labeled data field."""
-    def __init__(self, l_data, w_data, p_data, theta_l_data, q_t_data, timestep, config, xt, yt, zt):
+    def __init__(self, l_data, u_data, v_data, w_data, p_data, theta_l_data, q_t_data, timestep, config, xt, yt, zt):
         self.timestep = timestep
         self.distance_threshold = config['distance_threshold']
         self.xt = xt
@@ -31,7 +31,7 @@ class CloudField:
 
         # create cloud data from updated labeled array
         self.clouds = self.create_clouds_from_labeled_array(
-            updated_labeled_array, l_data, w_data, p_data, theta_l_data, q_t_data, config, xt, yt, zt)
+            updated_labeled_array, l_data, u_data, v_data, w_data, p_data, theta_l_data, q_t_data, config, xt, yt, zt)
 
         # plot the updated labeled clouds if plot_switch is True
         if config['plot_switch'] == True:
@@ -137,7 +137,7 @@ class CloudField:
         return labeled_array
 
     # @profile
-    def create_clouds_from_labeled_array(self, updated_labeled_array, l_data, w_data, p_data, theta_l_data, q_t_data, config, xt, yt, zt):
+    def create_clouds_from_labeled_array(self, updated_labeled_array, l_data, u_data, v_data, w_data, p_data, theta_l_data, q_t_data, config, xt, yt, zt):
         """Create Cloud objects from the updated labeled array with optimized performance."""
         print("Creating cloud data from labeled array...")
 
@@ -220,6 +220,8 @@ class CloudField:
                     points_as_tuples = [tuple(p) for p in points]
 
                     # Extract data using vectorized operations
+                    u_values = u_data[point_indices[:, 0], point_indices[:, 1], point_indices[:, 2]]
+                    v_values = v_data[point_indices[:, 0], point_indices[:, 1], point_indices[:, 2]]
                     w_values = w_data[point_indices[:, 0], point_indices[:, 1], point_indices[:, 2]]
                     l_values = l_data[point_indices[:, 0], point_indices[:, 1], point_indices[:, 2]]
                     p_values = p_data[point_indices[:, 0], point_indices[:, 1], point_indices[:, 2]]
@@ -240,6 +242,11 @@ class CloudField:
                     if hasattr(w_values, 'filled'):
                         w_values = w_values.filled(np.nan)
                     
+                    # --- Calculate Per-Cloud Mean Velocities ---
+                    mean_u = np.mean(u_values)
+                    mean_v = np.mean(v_values)
+                    mean_w = np.mean(w_values)
+
                     # Calculate max_w
                     max_w = np.max(w_values)
                     
@@ -318,6 +325,9 @@ class CloudField:
                         max_height=max_height,
                         max_w=max_w,
                         max_w_cloud_base=max_w_cloud_base,
+                        mean_u=mean_u,
+                        mean_v=mean_v,
+                        mean_w=mean_w,
                         cloud_base_area=cloud_base_area,
                         ql_flux=ql_flux,
                         mass_flux=mass_flux,
