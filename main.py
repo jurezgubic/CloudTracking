@@ -32,7 +32,7 @@ total_timesteps = 10
 # Set configuration parameters
 config = {
     'min_size': 10,  # Minimum size of cloud objects to be considered
-    'l_condition': 0.00001, # kg/kg. Minimum threshold for liquid water
+    'l_condition': 0.001, # kg/kg. Minimum threshold for liquid water
     'w_condition': 0.0,  # m/s. Minimum condition for vertical velocity
     'w_switch': False,  # True if you want to use vertical velocity threshold
     'timestep_duration': 60,  # Duration between timesteps in seconds
@@ -118,7 +118,7 @@ def process_clouds(cloud_tracker):
 
         # Write cloud track information to netCDF (now only writing complete lifecycle clouds)
         zt = cloud_field.zt
-        write_cloud_tracks_to_netcdf(cloud_tracker.get_tracks(), output_netcdf_path, timestep, zt)
+        write_cloud_tracks_to_netcdf(cloud_tracker.get_tracks(), cloud_field.env_mass_flux_per_level, output_netcdf_path, timestep, zt)
 
         # Force garbage collection to avoid memory issues
         gc.collect()
@@ -139,7 +139,8 @@ def process_clouds(cloud_tracker):
     print("Cloud tracking complete.")
 
     # Write the final state with only complete lifecycle clouds
-    write_cloud_tracks_to_netcdf(cloud_tracker.get_tracks(), output_netcdf_path, total_timesteps-1, zt)
+    # Note: cloud_field from the last timestep is used here.
+    write_cloud_tracks_to_netcdf(cloud_tracker.get_tracks(), cloud_field.env_mass_flux_per_level, output_netcdf_path, total_timesteps - 1, zt)
 
 
 def finalize_partial_lifetime_tracks(cloud_tracker, total_timesteps):

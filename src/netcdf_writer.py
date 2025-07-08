@@ -25,6 +25,7 @@ def initialize_netcdf(file_path, zt):
         root_grp.createVariable('ql_flux', 'f4', ('track', 'time'), fill_value=np.nan)
         root_grp.createVariable('mass_flux', 'f4', ('track', 'time'), fill_value=np.nan)
         root_grp.createVariable('mass_flux_per_level', 'f4', ('track', 'time', 'level'), fill_value=np.nan)
+        root_grp.createVariable('env_mass_flux_per_level', 'f4', ('time', 'level'), fill_value=np.nan)
         root_grp.createVariable('temp_per_level', 'f4', ('track', 'time', 'level'), fill_value=np.nan)
         root_grp.createVariable('theta_outside_per_level', 'f4', ('track', 'time', 'level'), fill_value=np.nan)
         root_grp.createVariable('w_per_level', 'f4', ('track', 'time', 'level'), fill_value=np.nan)
@@ -43,7 +44,7 @@ def initialize_netcdf(file_path, zt):
         height_var[:] = zt  # Assign the height values
 
 
-def write_cloud_tracks_to_netcdf(tracks, file_path, timestep, zt):
+def write_cloud_tracks_to_netcdf(tracks, env_mass_flux_per_level, file_path, timestep, zt):
     """Write cloud tracking data to a NetCDF file for a given timestep."""
 
     # Create the file. Warning: This will overwrite the file if it already exists.
@@ -61,6 +62,7 @@ def write_cloud_tracks_to_netcdf(tracks, file_path, timestep, zt):
         ql_flux_var = root_grp.variables['ql_flux']
         mass_flux_var = root_grp.variables['mass_flux']
         mass_flux_per_level_var = root_grp.variables['mass_flux_per_level']
+        env_mass_flux_per_level_var = root_grp.variables['env_mass_flux_per_level']
         temp_per_level_var = root_grp.variables['temp_per_level']
         theta_outside_per_level_var = root_grp.variables['theta_outside_per_level']
         w_per_level_var = root_grp.variables['w_per_level']
@@ -73,6 +75,10 @@ def write_cloud_tracks_to_netcdf(tracks, file_path, timestep, zt):
         age_var = root_grp.variables['age']
         valid_track_var = root_grp.variables['valid_track']  # We can reference it if needed
         merged_into_var = root_grp.variables['merged_into']
+
+        # Write environment data for this timestep
+        if env_mass_flux_per_level is not None:
+            env_mass_flux_per_level_var[timestep, :] = env_mass_flux_per_level
 
         # Write data for active clouds at this timestep
         active_tracks = list(tracks.keys())

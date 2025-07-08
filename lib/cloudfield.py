@@ -5,8 +5,7 @@ from memory_profiler import profile
 from scipy.ndimage import binary_dilation, binary_erosion, generate_binary_structure
 from utils.plotting_utils import plot_labeled_regions
 from lib.cloud import Cloud
-import utils.constants as const
-from utils.physics import calculate_physics_variables  # Import the Numba-accelerated function
+from utils.physics import calculate_physics_variables
 
 class CloudField:
     """Class to identify and track clouds in a labeled data field."""
@@ -16,12 +15,14 @@ class CloudField:
         self.xt = xt
         self.yt = yt
         self.zt = zt
+        self.env_mass_flux_per_level = None
 
         # creates a labeled array of objects
         labeled_array = self.identify_regions(l_data, w_data, config)
 
         if config['plot_switch'] == True:
-            plot_labeled_regions('labeled', labeled_array, timestep=timestep, plot_all_levels=True)
+            plot_labeled_regions(
+                'initial_labeled_array', labeled_array, timestep=timestep, plot_all_levels=False, specific_level=50)
 
         # find merges between edge regions
         merges = self.find_boundary_merges(labeled_array)
@@ -29,13 +30,19 @@ class CloudField:
         # update labels for merges
         updated_labeled_array = self.update_labels_for_merges(labeled_array, merges)
 
+        # Calculate environment mass flux before creating cloud objects
+        self.env_mass_flux_per_level = self._calculate_environment_mass_flux(
+            updated_labeled_array, p_data, theta_l_data, l_data, q_t_data, w_data, config
+        )
+
         # create cloud data from updated labeled array
         self.clouds = self.create_clouds_from_labeled_array(
             updated_labeled_array, l_data, u_data, v_data, w_data, p_data, theta_l_data, q_t_data, config, xt, yt, zt)
 
         # plot the updated labeled clouds if plot_switch is True
         if config['plot_switch'] == True:
-            plot_labeled_regions('updated', updated_labeled_array, timestep=timestep, plot_all_levels=True)
+            plot_labeled_regions(
+                'updated_labeled_array', updated_labeled_array, timestep=timestep, plot_all_levels=False, specific_level=50)
 
         # example of how to plot labeled regions
         # plot_labeled_regions(
@@ -43,9 +50,57 @@ class CloudField:
         # plot_labeled_regions(
             #'name_of_array', labeled_array, timestep=timestep, plot_all_levels=True) #plots all levels
 
+    def _calculate_environment_mass_flux(self, labeled_array, p_data, theta_l_data, l_data, q_t_data, w_data, config):
+        """Calculate mass flux for the environment (non-cloud regions) at each level."""
+        print("Calculating environment mass flux...")
+        env_mask = labeled_array == 0
+        n_levels = len(self.zt)
+        
+        if not np.any(env_mask):
+            return np.zeros(n_levels)
 
+        # Get coordinates of all environment points
+        z_indices, _, _ = np.where(env_mask)
 
+        # Extract 1D arrays of physical variables for all environment points
+        p_values_env = p_data[env_mask]
+        theta_l_values_env = theta_l_data[env_mask]
+        l_values_env = l_data[env_mask]
+        q_t_values_env = q_t_data[env_mask]
+        w_values_env = w_data[env_mask]
 
+        # Convert units for physics calculation
+        q_l_values_env = l_values_env / 1000.0
+        q_t_values_env_kg = q_t_values_env / 1000.0
+        q_v_values_env = q_t_values_env_kg - q_l_values_env
+
+        # Convert any masked arrays to regular arrays (needed for Numba)
+        if hasattr(p_values_env, 'filled'):
+            p_values_env = p_values_env.filled(np.nan)
+        if hasattr(theta_l_values_env, 'filled'):
+            theta_l_values_env = theta_l_values_env.filled(np.nan)
+        if hasattr(q_l_values_env, 'filled'):
+            q_l_values_env = q_l_values_env.filled(np.nan)
+        if hasattr(q_v_values_env, 'filled'):
+            q_v_values_env = q_v_values_env.filled(np.nan)
+        if hasattr(w_values_env, 'filled'):
+            w_values_env = w_values_env.filled(np.nan)
+
+        # Reuse the existing physics function to get mass flux for each point
+        _, _, mass_fluxes_env = calculate_physics_variables(
+            p_values_env,
+            theta_l_values_env,
+            q_l_values_env,
+            q_v_values_env,
+            w_values_env,
+            config['horizontal_resolution']**2
+        )
+
+        # Sum the mass fluxes per level using the z-indices
+        # np.bincount is highly efficient for this aggregation task
+        env_mass_flux_per_level = np.bincount(z_indices, weights=mass_fluxes_env, minlength=n_levels)
+        
+        return env_mass_flux_per_level
 
     def identify_regions(self, l_data, w_data, config):
         """Identify cloudy regions in the labeled data."""
