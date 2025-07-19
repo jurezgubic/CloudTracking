@@ -3,12 +3,20 @@ import matplotlib.pyplot as plt
 import matplotlib.cm as mcolors
 from netCDF4 import Dataset
 
-def visualise_cloud_lifecycles(netcdf_file, output_file=None, max_tracks=30, min_valid_timesteps=3):
+def visualise_cloud_lifecycles(netcdf_file, output_file=None, max_tracks=30, min_valid_timesteps=3, include_partial=False):
     """Create a visualisation showing cloud tracks over time (no merge arrows)."""
     with Dataset(netcdf_file, 'r') as ds:
-        # Get valid tracks only
+        # Get total track count for reporting
+        total_tracks = ds.dimensions['track'].size
+        
+        # Apply filtering based on valid_track flag
         valid_track = ds.variables['valid_track'][:]
-        valid_indices = np.where(valid_track == 1)[0]
+        if include_partial:
+            valid_indices = np.arange(total_tracks)  # Include all tracks
+            print(f"Including all {total_tracks} tracks (including {total_tracks - np.sum(valid_track == 1)} partial lifecycle tracks)")
+        else:
+            valid_indices = np.where(valid_track == 1)[0]
+            print(f"Using {len(valid_indices)} complete lifecycle tracks out of {total_tracks} total tracks")
         
         if len(valid_indices) == 0:
             print("No valid tracks found in the dataset.")

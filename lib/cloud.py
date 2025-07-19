@@ -58,5 +58,5 @@ class Cloud:
             self.max_height = new_height
 
     def __repr__(self):
-        return f"Cloud(ID: {self.cloud_id}, Size: {self.size}, Surface Area: {self.surface_area}, Max Height: {self.max_height}, Max w : {max_w}, Max w cloudbase: {max_w_cloud_base}, mass flux: {mass_flux}, Active: {self.is_active},  Timestep: {self.timestep})"
+        return f"Cloud(ID: {self.cloud_id}, Size: {self.size}, Surface Area: {self.surface_area}, Max Height: {self.max_height}, Max w: {self.max_w}, Max w cloudbase: {self.max_w_cloud_base}, mass flux: {self.mass_flux}, Active: {self.is_active}, Timestep: {self.timestep})"
 

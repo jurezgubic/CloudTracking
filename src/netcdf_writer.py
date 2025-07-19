@@ -3,7 +3,7 @@ import numpy as np
 import os
 
 def initialize_netcdf(file_path, zt):
-    """Create a new NetCDF file with the necessary dimensions and variables for cloud tracking data."""
+    """Create a new NetCDF file with necessary dimensions and variables for cloud tracking data."""
     # Create the file and define dimensions and variables
     with Dataset(file_path, 'w', format='NETCDF4') as root_grp:
         root_grp.createDimension('track', 10000)  # Fixed large number of tracks
@@ -12,10 +12,13 @@ def initialize_netcdf(file_path, zt):
         root_grp.createDimension('coordinate', 3)  # Static dimension for 3D coordinates
         root_grp.createDimension('level', len(zt))  # Using consistent height levels
 
-        # Flag for whether a track is fully valid or not
+        # Flag for whether a track is fully valid or not (0=partial, 1=complete)
         valid_track_var = root_grp.createVariable('valid_track', 'i4', ('track',))
         valid_track_var[:] = 1  # Default all to valid
 
+        # Track ID variable to help with debugging and analysis
+        track_id_var = root_grp.createVariable('track_id', 'i8', ('track',))
+        
         root_grp.createVariable('size', 'f4', ('track', 'time'), fill_value=np.nan)
         root_grp.createVariable('max_height', 'f4', ('track', 'time'), fill_value=np.nan)
         root_grp.createVariable('cloud_base_area', 'f4', ('track', 'time'), fill_value=np.nan)
@@ -44,15 +47,16 @@ def initialize_netcdf(file_path, zt):
         height_var[:] = zt  # Assign the height values
 
 
-def write_cloud_tracks_to_netcdf(tracks, env_mass_flux_per_level, file_path, timestep, zt):
-    """Write cloud tracking data to a NetCDF file for a given timestep."""
+def write_cloud_tracks_to_netcdf(tracks, track_id_to_index, tainted_tracks, env_mass_flux_per_level, file_path, timestep, zt):
+    """Write cloud tracking data to a NetCDF file for a given timestep using stable indices."""
 
-    # Create the file. Warning: This will overwrite the file if it already exists.
+    # Create the file if it doesn't exist
     if not os.path.exists(file_path):
         initialize_netcdf(file_path, zt)
 
-    # Write data for active clouds at this timestep
+    # Write data for clouds at this timestep
     with Dataset(file_path, 'a') as root_grp:
+        # Get variable handles
         size_var = root_grp.variables['size']
         max_height_var = root_grp.variables['max_height']
         surface_area_var = root_grp.variables['surface_area']
@@ -75,16 +79,42 @@ def write_cloud_tracks_to_netcdf(tracks, env_mass_flux_per_level, file_path, tim
         age_var = root_grp.variables['age']
         valid_track_var = root_grp.variables['valid_track']  # We can reference it if needed
         merged_into_var = root_grp.variables['merged_into']
+        track_id_var = root_grp.variables['track_id']  # New variable for track IDs
 
         # Write environment data for this timestep
         if env_mass_flux_per_level is not None:
             env_mass_flux_per_level_var[timestep, :] = env_mass_flux_per_level
 
-        # Write data for active clouds at this timestep
-        active_tracks = list(tracks.keys())
-        for i, track_id in enumerate(active_tracks):
-            cloud = tracks[track_id][-1]  # Get the last cloud which represents the current state
-            if cloud.is_active:
+        # Write track IDs only once (timestep 0 or whenever a track is first seen)
+        for track_id, idx in track_id_to_index.items():
+            if idx < len(track_id_var):  # Ensure we don't exceed array bounds
+                # Try to convert string IDs to integers for storage
+                try:
+                    numeric_id = int(track_id.split('-')[-1]) 
+                    track_id_var[idx] = numeric_id
+                except:
+                    # If conversion fails, just store -1 or another sentinel
+                    track_id_var[idx] = -1
+
+        # Write data for all tracks
+        for track_id, track in tracks.items():
+            if not track:  # Skip empty tracks
+                continue
+                
+            # Use the stable index
+            i = track_id_to_index[track_id]
+            
+            # Mark tainted tracks (partial lifecycle)
+            if track_id in tainted_tracks:
+                valid_track_var[i] = 0
+            
+            # Get the cloud state at this timestep
+            clouds_at_timestep = [c for c in track if c.timestep == timestep]
+            
+            if clouds_at_timestep:
+                cloud = clouds_at_timestep[0]  # There should be at most one cloud per track per timestep
+                
+                # Write cloud data to its stable index location
                 size_var[i, timestep] = cloud.size
                 max_height_var[i, timestep] = cloud.max_height
                 max_w_var[i, timestep] = cloud.max_w
@@ -103,6 +133,15 @@ def write_cloud_tracks_to_netcdf(tracks, env_mass_flux_per_level, file_path, tim
                 #points = np.array([list(p) for p in cloud.points[:10000]])
                 #cloud_points_var[i, timestep, :len(points), :] = points
                 age_var[i, timestep] = cloud.age
+
+                # Move this check INSIDE the if-block to prevent UnboundLocalError
+                if not cloud.is_active and cloud.merged_into is not None:
+                    if cloud.merged_into in track_id_to_index:
+                        merged_idx = track_id_to_index[cloud.merged_into]
+                        merged_into_var[i, timestep] = merged_idx
+                    else:
+                        # If the target track doesn't have an index yet (shouldn't happen)
+                        merged_into_var[i, timestep] = -2
             else:
                 # Set current and future entries to NaN for inactive clouds
                 size_var[i, timestep:] = np.nan
@@ -125,15 +164,6 @@ def write_cloud_tracks_to_netcdf(tracks, env_mass_flux_per_level, file_path, tim
                 #cloud_points_var[i, timestep:, :, :] = np.nan
                 age_var[i, timestep:] = -1
 
-                # Write merged_into information
-                if not cloud.is_active and cloud.merged_into is not None:
-                    # Find the index of the track it merged into
-                    if cloud.merged_into in active_tracks:
-                        merged_idx = active_tracks.index(cloud.merged_into)
-                        merged_into_var[i, timestep] = merged_idx
-                    else:
-                        # If the track it merged into isn't in our list (shouldn't happen)
-                        merged_into_var[i, timestep] = -2  # Special value indicating merged but target unknown
-                else:
-                    merged_into_var[i, timestep] = -1  # -1 means not merged
+                # Instead, simply set the merged_into field to the default "not merged" value
+                merged_into_var[i, timestep] = -1  # -1 means not merged
 

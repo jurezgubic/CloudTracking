@@ -15,6 +15,9 @@ class CloudTracker:
         self.yt = None
         self.domain_size_x = None
         self.domain_size_y = None
+        self.tainted_tracks = set()  # Store IDs of tracks with incomplete lifecycles
+        self.track_id_to_index = {}  # Maps track_id to stable NetCDF index
+        self.next_index = 0          # Next available NetCDF index
 
     def update_tracks(self, current_cloud_field, zt, xt, yt):
         """Update the cloud tracks with the current cloud field."""
