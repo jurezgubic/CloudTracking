@@ -20,9 +20,13 @@ def main():
     stats = compute_statistics(args.netcdf_file)
     visualise_statistics(stats, os.path.join(args.output_dir, "track_statistics.png"))
     
-    # Generate cloud lifecycle visualisation
+    # Generate cloud lifecycle visualisation with shorter minimum lifetime
     print("Creating cloud lifecycle visualisation...")
-    visualise_cloud_lifecycles(args.netcdf_file, os.path.join(args.output_dir, "cloud_lifecycles.png"))
+    visualise_cloud_lifecycles(
+        args.netcdf_file, 
+        os.path.join(args.output_dir, "cloud_lifecycles.png"),
+        min_valid_timesteps=2  # Reduce from default of 3
+    )
     
     print(f"Analysis complete. Results saved to {args.output_dir}")
 
