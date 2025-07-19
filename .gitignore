@@ -6,6 +6,12 @@ __pycache__/
 # netcdf files
 *.nc
 
+# Github copilot instructions
+.github/
+
+# All analysis results
+analysis_output/
+
 # pdf files
 *.pdf
 
