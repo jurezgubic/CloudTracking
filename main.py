@@ -27,7 +27,7 @@ file_name = {
 output_netcdf_path = 'cloud_results.nc'
 
 # Set number of timesteps to process
-total_timesteps = 30
+total_timesteps = 20
 
 # Set configuration parameters
 config = {
@@ -36,6 +36,7 @@ config = {
     'w_condition': 0.0,  # m/s. Minimum condition for vertical velocity
     'w_switch': False,  # True if you want to use vertical velocity threshold
     'timestep_duration': 60,  # Duration between timesteps in seconds
+    'matching_point_percentage': 0.0, # Percentage of interior cloud points to use for matching (0.0 to 1.0)
     'distance_threshold': 0, # Max dist between merging clouds across boundary
     'plot_switch': False, # Plot cloud field at each timestep
     'horizontal_resolution': 25.0, # m, taken from namelist

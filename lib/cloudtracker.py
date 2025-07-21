@@ -152,10 +152,11 @@ class CloudTracker:
     def is_match(self, cloud, last_cloud_in_track):
         """
         Checks if a cloud in the current timestep matches a cloud from the previous timestep
-        by searching for overlapping SURFACE points within a cylindrical volume.
+        by searching for overlapping points within a cylindrical volume.
+        The points used for matching are a combination of surface points and a sample of interior points.
         """
         # --- 1. Validation and Threshold Calculation ---
-        if not last_cloud_in_track.is_active or not cloud.surface_points.any() or not last_cloud_in_track.surface_points.any():
+        if not last_cloud_in_track.is_active or not cloud.matching_points.any() or not last_cloud_in_track.matching_points.any():
             return False
 
         timestep_duration = self.config['timestep_duration']
@@ -179,9 +180,9 @@ class CloudTracker:
         vertical_threshold = max(vertical_threshold, self.config['horizontal_resolution'])
 
         # --- 2. Prepare Point Sets and Apply Drift (Vectorized) ---
-        # Use the much smaller set of surface_points for matching
-        current_points = cloud.surface_points
-        last_points = last_cloud_in_track.surface_points
+        # Use the designated matching_points for comparison.
+        current_points = cloud.matching_points
+        last_points = last_cloud_in_track.matching_points
 
         # --- Physics: Advect the previous cloud using its own internal mean velocity ---
         # This is a more accurate physical model than using the environmental mean,

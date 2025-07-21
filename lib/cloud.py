@@ -8,6 +8,7 @@ class Cloud:
                  location, 
                  points, 
                  surface_points,
+                 matching_points,
                  timestep, 
                  max_height, 
                  max_w, 
@@ -33,6 +34,7 @@ class Cloud:
         self.location = location
         self.points = points
         self.surface_points = surface_points
+        self.matching_points = matching_points
         self.timestep = timestep
         self.max_height = max_height
         self.max_w = max_w

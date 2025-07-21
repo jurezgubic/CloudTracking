@@ -251,7 +251,23 @@ class CloudField:
                     inner_mask = binary_erosion(cloud_mask, structure=erosion_structure)
                     # The surface is the original mask minus the inner part.
                     surface_mask = cloud_mask & ~inner_mask
+                    
+                    # --- Matching Point Selection ---
+                    # Physics: Combine all surface points with a random sample of interior points.
+                    # This provides a more stable set of points for matching, as the core of the
+                    # cloud is less likely to change drastically between timesteps than its thin edges.
                     surface_point_indices = np.argwhere(surface_mask)
+                    interior_mask = cloud_mask & ~surface_mask
+                    interior_point_indices = np.argwhere(interior_mask)
+                    
+                    num_interior_to_sample = int(len(interior_point_indices) * config.get('matching_point_percentage', 0.1))
+                    
+                    if num_interior_to_sample > 0:
+                        sampled_indices = np.random.choice(len(interior_point_indices), num_interior_to_sample, replace=False)
+                        sampled_interior_points = interior_point_indices[sampled_indices]
+                        matching_point_indices = np.vstack((surface_point_indices, sampled_interior_points))
+                    else:
+                        matching_point_indices = surface_point_indices
 
                     # Skip if no points (shouldn't happen but just in case)
                     if len(point_indices) == 0:
@@ -268,6 +284,12 @@ class CloudField:
                         xt[surface_point_indices[:, 2]],
                         yt[surface_point_indices[:, 1]],
                         zt[surface_point_indices[:, 0]]
+                    ])
+
+                    matching_points = np.column_stack([
+                        xt[matching_point_indices[:, 2]],
+                        yt[matching_point_indices[:, 1]],
+                        zt[matching_point_indices[:, 0]]
                     ])
 
                     # ToDo (optimisation): The conversion to a list of tuples is slow and should be removed
@@ -377,6 +399,7 @@ class CloudField:
                         location=(xt[int(region.centroid[2])], yt[int(region.centroid[1])], zt[int(region.centroid[0])]),
                         points=points_as_tuples,
                         surface_points=surface_points,
+                        matching_points=matching_points,
                         max_height=max_height,
                         max_w=max_w,
                         max_w_cloud_base=max_w_cloud_base,
