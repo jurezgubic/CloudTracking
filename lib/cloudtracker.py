@@ -162,7 +162,7 @@ class CloudTracker:
         
         # Physics: The safety factor creates a buffer around the predicted location.
         # It accounts for the cloud's acceleration/deceleration between timesteps.
-        safety_factor = 2.0
+        safety_factor = 3.0
 
         # --- Physics: Calculate a dynamic search radius based on the cloud's OWN velocity. ---
         # This ensures the search area is proportional to the cloud's specific momentum.
