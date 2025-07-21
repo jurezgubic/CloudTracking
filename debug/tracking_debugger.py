@@ -2,8 +2,11 @@ import sys
 import os
 import matplotlib.pyplot as plt
 from matplotlib.patches import Circle, Arrow
-from mpl_toolkits.mplot3d import Axes3D # Import for 3D plotting
+from mpl_toolkits.mplot3d import Axes3D
+import matplotlib.tri as mtri
+from scipy.spatial import ConvexHull, Delaunay
 import numpy as np
+from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 
 # Add project root to the Python path
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
@@ -15,6 +18,7 @@ def visualise_match_attempt(cloud_t0, cloud_field_t1, tracker, config, xt, yt, z
     """
     Visualises the matching attempt by plotting the 3D points of the
     initial cloud and its potential successor with interactive controls.
+    Clouds are rendered as semi-transparent surfaces to show their structure.
 
     Args:
         cloud_t0: The Cloud object from the first timestep.
@@ -47,18 +51,45 @@ def visualise_match_attempt(cloud_t0, cloud_field_t1, tracker, config, xt, yt, z
         print(f"First element value: {points_t0[0]}")
     
     # Extract x, y, z coordinates from the list of tuples
-    if points_t0:
+    if points_t0 and len(points_t0) > 3:  # Need at least 4 points for 3D hull
         # Points are already in physical coordinates as tuples (x, y, z)
         x_coords_t0 = [point[0] for point in points_t0]
         y_coords_t0 = [point[1] for point in points_t0]
         z_coords_t0 = [point[2] for point in points_t0]
         
-        # Plot all cloud points
-        ax.scatter(x_coords_t0, y_coords_t0, z_coords_t0, c='green', marker='o', s=30, alpha=0.5, label=f'Cloud {cloud_t0.cloud_id} (t)')
+        # Convert to numpy array for convex hull
+        cloud_points_t0 = np.column_stack((x_coords_t0, y_coords_t0, z_coords_t0))
         
-        # Also plot the cloud center as a larger marker
+        try:
+            # Create a convex hull representation of the cloud
+            hull_t0 = ConvexHull(cloud_points_t0)
+            
+            # Get simplices (triangles) from the hull
+            simplices = hull_t0.simplices
+            
+            # Create a Poly3DCollection for the hull faces
+            faces = []
+            for simplex in simplices:
+                faces.append([cloud_points_t0[s] for s in simplex])
+            
+            # Plot the cloud surface as a semi-transparent green surface
+            poly_t0 = Poly3DCollection(faces, alpha=0.3, facecolor='green', 
+                                      edgecolor='lightgreen', linewidths=0.5)
+            ax.add_collection3d(poly_t0)
+            
+            # Add this to the legend manually
+            ax.plot([],[], linestyle="-", color='green', alpha=0.3, 
+                   label=f'Cloud {cloud_t0.cloud_id} (t) Surface')
+        except Exception as e:
+            print(f"Could not create cloud surface for t0: {e}")
+            # Fall back to scatter plot
+            ax.scatter(x_coords_t0, y_coords_t0, z_coords_t0, c='green', marker='o', 
+                      s=30, alpha=0.5, label=f'Cloud {cloud_t0.cloud_id} (t)')
+        
+        # Always plot the cloud center as a larger marker
         loc = cloud_t0.location
-        ax.scatter([loc[0]], [loc[1]], [loc[2]], c='darkgreen', marker='o', s=150, alpha=1.0, label=f'Center {cloud_t0.cloud_id} (t)')
+        ax.scatter([loc[0]], [loc[1]], [loc[2]], c='darkgreen', marker='o', 
+                  s=150, alpha=1.0, label=f'Center {cloud_t0.cloud_id} (t)')
     
     # --- Find the matched cloud and plot its points ---
     match_found = False
@@ -72,19 +103,48 @@ def visualise_match_attempt(cloud_t0, cloud_field_t1, tracker, config, xt, yt, z
     if match_found:
         # Plot all points of the matched cloud
         points_t1 = matched_cloud_t1.points
-        if points_t1:
+        if points_t1 and len(points_t1) > 3:  # Need at least 4 points for 3D hull
             x_coords_t1 = [point[0] for point in points_t1]
             y_coords_t1 = [point[1] for point in points_t1]
             z_coords_t1 = [point[2] for point in points_t1]
             
-            ax.scatter(x_coords_t1, y_coords_t1, z_coords_t1, c='yellow', marker='^', s=30, alpha=0.5, label=f'Cloud {matched_cloud_t1.cloud_id} (t+1)')
+            # Convert to numpy array for convex hull
+            cloud_points_t1 = np.column_stack((x_coords_t1, y_coords_t1, z_coords_t1))
+            
+            try:
+                # Create a convex hull representation of the cloud
+                hull_t1 = ConvexHull(cloud_points_t1)
+                
+                # Get simplices (triangles) from the hull
+                simplices = hull_t1.simplices
+                
+                # Create a Poly3DCollection for the hull faces
+                faces = []
+                for simplex in simplices:
+                    faces.append([cloud_points_t1[s] for s in simplex])
+                
+                # Plot the cloud surface as a semi-transparent yellow surface
+                poly_t1 = Poly3DCollection(faces, alpha=0.3, facecolor='yellow', 
+                                          edgecolor='lightyellow', linewidths=0.5)
+                ax.add_collection3d(poly_t1)
+                
+                # Add this to the legend manually
+                ax.plot([],[], linestyle="-", color='yellow', alpha=0.3, 
+                       label=f'Cloud {matched_cloud_t1.cloud_id} (t+1) Surface')
+            except Exception as e:
+                print(f"Could not create cloud surface for t1: {e}")
+                # Fall back to scatter plot
+                ax.scatter(x_coords_t1, y_coords_t1, z_coords_t1, c='yellow', marker='^', 
+                          s=30, alpha=0.5, label=f'Cloud {matched_cloud_t1.cloud_id} (t+1)')
             
             # Also plot the cloud center as a larger marker
             loc_t1 = matched_cloud_t1.location
-            ax.scatter([loc_t1[0]], [loc_t1[1]], [loc_t1[2]], c='orange', marker='^', s=150, alpha=1.0, label=f'Center {matched_cloud_t1.cloud_id} (t+1)')
+            ax.scatter([loc_t1[0]], [loc_t1[1]], [loc_t1[2]], c='orange', marker='^', 
+                      s=150, alpha=1.0, label=f'Center {matched_cloud_t1.cloud_id} (t+1)')
             
             # Draw a line connecting the cloud centers
-            ax.plot([loc[0], loc_t1[0]], [loc[1], loc_t1[1]], [loc[2], loc_t1[2]], 'k--', alpha=0.8, linewidth=2)
+            ax.plot([loc[0], loc_t1[0]], [loc[1], loc_t1[1]], [loc[2], loc_t1[2]], 
+                   'k--', alpha=0.8, linewidth=2, label='Cloud Movement')
             
             # Calculate bounding box for both clouds to set view limits
             all_x = x_coords_t0 + x_coords_t1
@@ -96,52 +156,6 @@ def visualise_match_attempt(cloud_t0, cloud_field_t1, tracker, config, xt, yt, z
                 ax.set_xlim(min(all_x) - padding, max(all_x) + padding)
                 ax.set_ylim(min(all_y) - padding, max(all_y) + padding)
                 ax.set_zlim(min(all_z) - padding, max(all_z) + padding)
-    else:
-        # If no match, plot all nearby clouds within a reasonable distance
-        loc = cloud_t0.location
-        nearby_clouds = []
-        
-        for cloud_id, cloud_t1 in cloud_field_t1.clouds.items():
-            loc_t1 = cloud_t1.location
-            distance = np.sqrt((loc[0] - loc_t1[0])**2 + 
-                              (loc[1] - loc_t1[1])**2 + 
-                              (loc[2] - loc_t1[2])**2)
-            
-            # Threshold for "nearby" - adjust as needed
-            if distance < 2000:  # meters
-                nearby_clouds.append(cloud_t1)
-                # Plot cloud center
-                ax.scatter([loc_t1[0]], [loc_t1[1]], [loc_t1[2]], c='blue', marker='x', s=100, 
-                          alpha=0.8, label=f'Candidate {cloud_id.split("-")[1]} (t+1)')
-                
-                # Add distance annotation
-                ax.text(loc_t1[0], loc_t1[1], loc_t1[2] + 50, f"{distance:.0f}m", fontsize=8)
-        
-        # Plot the points of the closest candidate cloud
-        if nearby_clouds:
-            closest_cloud = min(nearby_clouds, key=lambda c: np.sqrt((loc[0] - c.location[0])**2 + 
-                                                                    (loc[1] - c.location[1])**2 + 
-                                                                    (loc[2] - c.location[2])**2))
-            
-            points_t1 = closest_cloud.points
-            if points_t1:
-                x_coords_t1 = [point[0] for point in points_t1]
-                y_coords_t1 = [point[1] for point in points_t1]
-                z_coords_t1 = [point[2] for point in points_t1]
-                
-                ax.scatter(x_coords_t1, y_coords_t1, z_coords_t1, c='blue', marker='^', s=30, 
-                          alpha=0.3, label=f'Closest Candidate {closest_cloud.cloud_id.split("-")[1]}')
-                
-                # Calculate bounding box
-                all_x = x_coords_t0 + x_coords_t1
-                all_y = y_coords_t0 + y_coords_t1
-                all_z = z_coords_t0 + z_coords_t1
-                
-                if all_x and all_y and all_z:
-                    padding = 500  # meters
-                    ax.set_xlim(min(all_x) - padding, max(all_x) + padding)
-                    ax.set_ylim(min(all_y) - padding, max(all_y) + padding)
-                    ax.set_zlim(min(all_z) - padding, max(all_z) + padding)
 
     # If limits haven't been set by the bounding box calculations above
     if not hasattr(ax, '_xlim') or ax._xlim is None:
