@@ -3,8 +3,24 @@ import matplotlib.pyplot as plt
 import matplotlib.cm as mcolors
 from netCDF4 import Dataset
 
-def visualise_cloud_lifecycles(netcdf_file, output_file=None, max_tracks=30, min_valid_timesteps=3, include_partial=False):
-    """Create a visualisation showing cloud tracks over time (no merge arrows)."""
+def visualise_cloud_lifecycles(netcdf_file, output_file=None, max_tracks=30, min_valid_timesteps=3, min_size_threshold=10, include_partial=False):
+    """Create a visualisation showing cloud tracks over time (no merge arrows).
+    
+    Parameters:
+    -----------
+    netcdf_file : str
+        Path to NetCDF file with cloud tracking data
+    output_file : str, optional
+        If provided, save figure to this path instead of displaying
+    max_tracks : int
+        Maximum number of tracks to display
+    min_valid_timesteps : int
+        Minimum number of timesteps a cloud must exist to be included
+    min_size_threshold : int
+        Minimum size (grid points) a cloud must reach in at least one timestep
+    include_partial : bool
+        Whether to include partial/tainted tracks or only complete lifecycle tracks
+    """
     with Dataset(netcdf_file, 'r') as ds:
         # Get total track count for reporting
         total_tracks = ds.dimensions['track'].size
@@ -22,28 +38,36 @@ def visualise_cloud_lifecycles(netcdf_file, output_file=None, max_tracks=30, min
             print("No valid tracks found in the dataset.")
             return
             
-        # Determine which tracks have sufficient data
+        # Determine which tracks have sufficient data and size
         size = ds.variables['size'][:]
         max_height = ds.variables['max_height'][:]
         
-        # Calculate number of valid timesteps for each track
+        # Calculate number of valid timesteps for each track and check size threshold
         track_data_points = []
         for i, idx in enumerate(valid_indices):
             # Count non-NaN entries in size data
             valid_timesteps = np.sum(~np.isnan(size[idx]))
+            
+            # Check if the track meets both criteria
             if valid_timesteps >= min_valid_timesteps:
-                # Store track index, number of valid timesteps, and max cloud height
-                track_max_height = np.nanmax(max_height[idx])
-                track_data_points.append((idx, valid_timesteps, track_max_height))
+                # Check if there's at least one timestep where size > threshold
+                track_sizes = size[idx][~np.isnan(size[idx])]
+                max_track_size = np.max(track_sizes) if len(track_sizes) > 0 else 0
+                
+                if max_track_size >= min_size_threshold:
+                    # Store track index, number of valid timesteps, and max cloud height
+                    track_max_height = np.nanmax(max_height[idx])
+                    track_data_points.append((idx, valid_timesteps, track_max_height))
         
         # Sort by number of valid timesteps (descending)
         track_data_points.sort(key=lambda x: x[1], reverse=True)
         
         if len(track_data_points) == 0:
-            print(f"No valid tracks with at least {min_valid_timesteps} valid timesteps found.")
+            print(f"No valid tracks with at least {min_valid_timesteps} valid timesteps and size > {min_size_threshold} found.")
             return
         
-        print(f"Found {len(track_data_points)} tracks with sufficient data out of {len(valid_indices)} valid tracks")
+        print(f"Found {len(track_data_points)} tracks meeting criteria: complete lifecycle, ≥{min_valid_timesteps} timesteps, "
+              f"max size ≥{min_size_threshold}")
         
         # Select a balanced set of tracks: some long-lived, some medium, some short-lived
         selected_tracks = []
