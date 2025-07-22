@@ -4,7 +4,8 @@ class Cloud:
                  cloud_id, 
                  size, 
                  surface_area, 
-                 cloud_base_area, 
+                 cloud_base_area,
+                 cloud_base_height,  # Add new parameter
                  location, 
                  points, 
                  surface_points,
@@ -30,6 +31,7 @@ class Cloud:
         self.size = size
         self.surface_area = surface_area
         self.cloud_base_area = cloud_base_area
+        self.cloud_base_height = cloud_base_height  # Add new property
         self.location = location
         self.points = points
         self.surface_points = surface_points

@@ -46,6 +46,9 @@ def initialize_netcdf(file_path, zt):
         height_var = root_grp.createVariable('height', 'f4', ('level', ))
         height_var[:] = zt  # Assign the height values
 
+        # Add cloud base height variable
+        root_grp.createVariable('cloud_base_height', 'f4', ('track', 'time'), fill_value=np.nan)
+
 
 def write_cloud_tracks_to_netcdf(tracks, track_id_to_index, tainted_tracks, env_mass_flux_per_level, file_path, timestep, zt):
     """Write cloud tracking data to a NetCDF file for a given timestep using stable indices."""
@@ -61,6 +64,7 @@ def write_cloud_tracks_to_netcdf(tracks, track_id_to_index, tainted_tracks, env_
         max_height_var = root_grp.variables['max_height']
         surface_area_var = root_grp.variables['surface_area']
         cloud_base_area_var = root_grp.variables['cloud_base_area']
+        cloud_base_height_var = root_grp.variables['cloud_base_height']
         max_w_var = root_grp.variables['max_w']
         max_w_cloud_base_var = root_grp.variables['max_w_cloud_base']
         ql_flux_var = root_grp.variables['ql_flux']
@@ -133,6 +137,7 @@ def write_cloud_tracks_to_netcdf(tracks, track_id_to_index, tainted_tracks, env_
                 #points = np.array([list(p) for p in cloud.points[:10000]])
                 #cloud_points_var[i, timestep, :len(points), :] = points
                 age_var[i, timestep] = cloud.age
+                cloud_base_height_var[i, timestep] = cloud.cloud_base_height
 
                 # Move this check INSIDE the if-block to prevent UnboundLocalError
                 if not cloud.is_active and cloud.merged_into is not None:

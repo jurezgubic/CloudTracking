@@ -318,6 +318,9 @@ class CloudField:
                     # Calculate max height with vectorized operations
                     max_height = np.max(zt[point_indices[:, 0]])
                     
+                    # Calculate min height with vectorized operations
+                    min_height = np.min(zt[point_indices[:, 0]])
+                    
                     # Compute surface area
                     surface_mask = binary_dilation(cloud_mask) & ~cloud_mask
                     surface_area = np.sum(surface_mask) * config['horizontal_resolution']**2
@@ -392,7 +395,8 @@ class CloudField:
                         w_per_level=w_per_level,
                         circum_per_level=circum_per_level,
                         eff_radius_per_level=eff_radius_per_level,
-                        timestep=self.timestep
+                        timestep=self.timestep,
+                        cloud_base_height=min_height  # This correctly assigns the lowest point's height
                     )
             
             # Force garbage collection after each batch
