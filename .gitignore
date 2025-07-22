@@ -12,6 +12,9 @@ __pycache__/
 # All analysis results
 analysis_output/
 
+# Any animations (mp4)
+*.mp4
+
 # pdf files
 *.pdf
 
