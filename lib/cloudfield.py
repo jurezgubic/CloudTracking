@@ -6,6 +6,7 @@ from scipy.ndimage import binary_dilation, binary_erosion, generate_binary_struc
 from utils.plotting_utils import plot_labeled_regions
 from lib.cloud import Cloud
 from utils.physics import calculate_physics_variables
+from scipy.spatial import cKDTree
 
 class CloudField:
     """Class to identify and track clouds in a labeled data field."""
@@ -49,6 +50,14 @@ class CloudField:
             #'name_or_array', labeled_array, timestep=timestep, plot_all_levels=False, specific_level=50)
         # plot_labeled_regions(
             #'name_of_array', labeled_array, timestep=timestep, plot_all_levels=True) #plots all levels
+
+        # Add these attributes to store the precomputed KD-tree
+        self.surface_points_array = None
+        self.surface_point_to_cloud_id = None
+        self.surface_points_kdtree = None
+
+        # After clouds are created
+        self.build_global_surface_kdtree()
 
     def _calculate_environment_mass_flux(self, labeled_array, p_data, theta_l_data, l_data, q_t_data, w_data, config):
         """Calculate mass flux for the environment (non-cloud regions) at each level."""
@@ -257,7 +266,7 @@ class CloudField:
                     if len(point_indices) == 0:
                         continue
                     
-                    # Create points array efficiently
+                    # Create points array
                     points = np.column_stack([
                         xt[point_indices[:, 2]],
                         yt[point_indices[:, 1]],
@@ -270,9 +279,6 @@ class CloudField:
                         zt[surface_point_indices[:, 0]]
                     ])
 
-                    # REMOVE this conversion - pass NumPy array directly
-                    # points_as_tuples = [tuple(p) for p in points]
-                    
                     # Extract data using vectorized operations
                     u_values = u_data[point_indices[:, 0], point_indices[:, 1], point_indices[:, 2]]
                     v_values = v_data[point_indices[:, 0], point_indices[:, 1], point_indices[:, 2]]
@@ -377,7 +383,7 @@ class CloudField:
                         size=region.area,
                         surface_area=surface_area,
                         location=(xt[int(region.centroid[2])], yt[int(region.centroid[1])], zt[int(region.centroid[0])]),
-                        points=points,  # Pass NumPy array directly instead of points_as_tuples
+                        points=points,  # Pass NumPy array
                         surface_points=surface_points,
                         max_height=max_height,
                         max_w=max_w,
@@ -403,3 +409,36 @@ class CloudField:
         
         print(f"Cloud data for {len(clouds)} objects.")
         return clouds
+
+    def build_global_surface_kdtree(self):
+        """Build a single KD-tree for all surface points in the cloud field."""
+        if not self.clouds:
+            return
+            
+        print("Building global surface point KD-tree...")
+        
+        # Calculate total number of surface points
+        total_points = sum(cloud.surface_points.shape[0] for cloud in self.clouds.values())
+        
+        # Pre-allocate arrays for better memory efficiency
+        self.surface_points_array = np.empty((total_points, 3), dtype=np.float32)
+        self.surface_point_to_cloud_id = np.empty(total_points, dtype=object)
+        
+        # Fill arrays with surface points and their cloud IDs
+        idx = 0
+        for cloud_id, cloud in self.clouds.items():
+            n_points = cloud.surface_points.shape[0]
+            if n_points > 0:
+                self.surface_points_array[idx:idx+n_points] = cloud.surface_points
+                self.surface_point_to_cloud_id[idx:idx+n_points] = cloud_id
+                idx += n_points
+        
+        # Trim arrays to actual size (in case some clouds had no surface points)
+        if idx < total_points:
+            self.surface_points_array = self.surface_points_array[:idx]
+            self.surface_point_to_cloud_id = self.surface_point_to_cloud_id[:idx]
+        
+        # Build the KD-tree using only X,Y coordinates
+        if len(self.surface_points_array) > 0:
+            self.surface_points_kdtree = cKDTree(self.surface_points_array[:, :2])
+            print(f"KD-tree built with {len(self.surface_points_array)} surface points")

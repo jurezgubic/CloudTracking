@@ -48,7 +48,8 @@ class CloudTracker:
                     
                 # Find all potential fragments that match this cloud
                 for cloud_id, cloud in current_cloud_field.clouds.items():
-                    if self.is_match(cloud, last_cloud_in_track):
+                    # Pass the cloud_field to is_match so it can use the pre-built KD-tree
+                    if self.is_match(cloud, last_cloud_in_track, current_cloud_field):
                         # Record this potential inheritance
                         if cloud_id not in cloud_inheritance:
                             cloud_inheritance[cloud_id] = []
@@ -149,13 +150,21 @@ class CloudTracker:
                 self.cloud_tracks[cloud_id] = [cloud]
 
     # @profile
-    def is_match(self, cloud, last_cloud_in_track):
+    def is_match(self, cloud, last_cloud_in_track, current_cloud_field):
         """
         Checks if a cloud in the current timestep matches a cloud from the previous timestep
         by searching for overlapping SURFACE points within a cylindrical volume.
+        
+        Args:
+            cloud: Cloud object from current timestep
+            last_cloud_in_track: Cloud object from previous timestep
+            current_cloud_field: CloudField object containing the pre-built KD-tree
         """
         # --- 1. Validation and Threshold Calculation ---
-        if not last_cloud_in_track.is_active or not cloud.surface_points.any() or not last_cloud_in_track.surface_points.any():
+        if not last_cloud_in_track.is_active or not last_cloud_in_track.surface_points.any():
+            return False
+        
+        if current_cloud_field.surface_points_kdtree is None:
             return False
 
         timestep_duration = self.config['timestep_duration']
@@ -179,27 +188,15 @@ class CloudTracker:
         vertical_threshold = max(vertical_threshold, 2 * self.config['horizontal_resolution'])
 
         # --- 2. Prepare Point Sets and Apply Drift (Vectorized) ---
-        # Use the much smaller set of surface_points for matching
-        current_points = cloud.surface_points
         last_points = last_cloud_in_track.surface_points
-
-        # --- Physics: Advect the previous cloud using its own internal mean velocity ---
-        # This is a more accurate physical model than using the environmental mean,
-        # as it accounts for the cloud's own momentum.
+        
+        # --- Apply drift to previous cloud points ---
         dx = last_cloud_in_track.mean_u * timestep_duration
         dy = last_cloud_in_track.mean_v * timestep_duration
         dz = last_cloud_in_track.mean_w * timestep_duration
-        
-        # Apply total drift to get the expected position of the previous cloud's points
-        # Note: np.copy is not needed here as addition creates a new array.
         adjusted_points = last_points + [dx, dy, dz]
-
-        # --- 3. Build 2D KD-Tree for Horizontal Search ---
-        # ToDo (optimisation): For better performance, build one KD-tree for the entire 
-        # current_cloud_field and query it for each track, rather than building a tree for each potential match.
-        tree_current_2d = cKDTree(current_points[:, :2]) # Use only X, Y coordinates
-
-        # --- 4. Handle Cyclic Boundaries (Vectorized) ---
+        
+        # --- 3. Handle Cyclic Boundaries (Vectorized) ---
         points_to_query = [adjusted_points]
         # Check and append points for each boundary crossing scenario
         if np.any(adjusted_points[:, 0] < self.xt[0] + horizontal_threshold):
@@ -212,24 +209,38 @@ class CloudTracker:
             points_to_query.append(adjusted_points - [0, self.domain_size_y, 0])
         
         all_query_points = np.vstack(points_to_query)
-
-        # --- 5. Perform Cylindrical Search ---
-        # Find all pairs of points that are within the HORIZONTAL threshold using the 2D tree.
-        nearby_indices_list = tree_current_2d.query_ball_point(all_query_points[:, :2], r=horizontal_threshold)
-
-        # --- 6. Check Vertical Proximity for Horizontal Matches ---
-        for i, current_point_indices in enumerate(nearby_indices_list):
-            if not current_point_indices:  # No horizontal matches for this point.
+        
+        # --- 4. Query the pre-built global KD-tree ---
+        nearby_indices_list = current_cloud_field.surface_points_kdtree.query_ball_point(
+            all_query_points[:, :2], r=horizontal_threshold
+        )
+        
+        # --- 5. Check for matches with the current cloud ID ---
+        cloud_id = cloud.cloud_id
+        for i, indices in enumerate(nearby_indices_list):
+            if not indices:
                 continue
-
-            last_z = all_query_points[i, 2]
-            current_z_values = current_points[current_point_indices, 2];
-
-            # Check if the absolute vertical distance is within the threshold for ANY of the pairs.
-            if np.any(np.abs(current_z_values - last_z) <= vertical_threshold):
-                return True  # Found a valid match.
-
-        return False # No match found.
+                
+            # Get cloud IDs for the nearby points
+            nearby_cloud_ids = np.unique(current_cloud_field.surface_point_to_cloud_id[indices])
+            
+            # If the current cloud's ID is among them, check vertical proximity
+            if cloud_id in nearby_cloud_ids:
+                # Get only points belonging to the current cloud
+                current_cloud_mask = current_cloud_field.surface_point_to_cloud_id[indices] == cloud_id
+                current_point_indices = np.array(indices)[current_cloud_mask]
+                
+                if len(current_point_indices) == 0:
+                    continue
+                    
+                # Check vertical proximity
+                last_z = all_query_points[i, 2]
+                current_z_values = current_cloud_field.surface_points_array[current_point_indices, 2]
+                
+                if np.any(np.abs(current_z_values - last_z) <= vertical_threshold):
+                    return True
+    
+        return False
 
     def get_tracks(self):
         return self.cloud_tracks
