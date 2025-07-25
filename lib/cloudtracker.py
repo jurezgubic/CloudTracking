@@ -91,7 +91,7 @@ class CloudTracker:
                         for parent, parent_track_id in cloud_inheritance[cloud_id]:
                             if parent_track_id == track_id:
                                 # Update max height if needed
-                                current_max_height = max(z for _, _, z in cloud.points)
+                                current_max_height = np.max(cloud.points[:, 2])
                                 if current_max_height > last_cloud_in_track.max_height:
                                     last_cloud_in_track.max_height = current_max_height
                                 

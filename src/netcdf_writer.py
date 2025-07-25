@@ -134,7 +134,6 @@ def write_cloud_tracks_to_netcdf(tracks, track_id_to_index, tainted_tracks, env_
                 cloud_base_area_var[i, timestep] = cloud.cloud_base_area
                 surface_area_var[i, timestep] = cloud.surface_area
                 loc_x_var[i, timestep], loc_y_var[i, timestep], loc_z_var[i, timestep] = cloud.location
-                #points = np.array([list(p) for p in cloud.points[:10000]])
                 #cloud_points_var[i, timestep, :len(points), :] = points
                 age_var[i, timestep] = cloud.age
                 cloud_base_height_var[i, timestep] = cloud.cloud_base_height
