@@ -27,7 +27,7 @@ file_name = {
 output_netcdf_path = 'cloud_results.nc'
 
 # Set number of timesteps to process
-total_timesteps = 38
+total_timesteps = 10
 
 # Set configuration parameters
 config = {
