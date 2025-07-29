@@ -6,7 +6,7 @@ def initialize_netcdf(file_path, zt):
     """Create a new NetCDF file with necessary dimensions and variables for cloud tracking data."""
     # Create the file and define dimensions and variables
     with Dataset(file_path, 'w', format='NETCDF4') as root_grp:
-        root_grp.createDimension('track', 10000)  # Fixed large number of tracks
+        root_grp.createDimension('track', 100000)  # Fixed large number of tracks
         root_grp.createDimension('time', None)  # Unlimited time dimension
         #root_grp.createDimension('point', 100000)  # Static dimension for cloud points Warning: Not in use, crude test remnant!
         root_grp.createDimension('coordinate', 3)  # Static dimension for 3D coordinates
