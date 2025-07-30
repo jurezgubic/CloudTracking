@@ -2,7 +2,9 @@ import numpy as np
 import gc
 from skimage import measure
 from memory_profiler import profile
-from scipy.ndimage import binary_dilation, binary_erosion, generate_binary_structure
+from scipy.ndimage import binary_dilation  # Keep this for other operations
+# Remove: from scipy.ndimage import binary_erosion, generate_binary_structure
+from skimage.morphology import binary_erosion, cube  # Add these imports
 from utils.plotting_utils import plot_labeled_regions
 from lib.cloud import Cloud
 from utils.physics import calculate_physics_variables
@@ -232,8 +234,8 @@ class CloudField:
         # Calculate horizontal_resolution_squared once
         horizontal_resolution_squared = config['horizontal_resolution']**2
         
-        # Define a 3D connectivity structure for erosion, used to find surface points
-        erosion_structure = generate_binary_structure(3, 3)
+        # Create a 3×3×3 cube for 26-connectivity erosion operations
+        erosion_footprint = cube(3)
 
         # Create Cloud objects in batches to manage memory
         clouds = {}
@@ -256,8 +258,8 @@ class CloudField:
                     point_indices = np.argwhere(cloud_mask)
                     
                     # --- Surface Point Calculation ---
-                    # Erode the mask to find the "inner" points.
-                    inner_mask = binary_erosion(cloud_mask, structure=erosion_structure)
+                    # Erode the mask to find the "inner" points using skimage's optimized implementation
+                    inner_mask = binary_erosion(cloud_mask, footprint=erosion_footprint)
                     # The surface is the original mask minus the inner part.
                     surface_mask = cloud_mask & ~inner_mask
                     surface_point_indices = np.argwhere(surface_mask)
