@@ -27,12 +27,12 @@ file_name = {
 output_netcdf_path = 'cloud_results.nc'
 
 # Set number of timesteps to process
-total_timesteps = 6
+total_timesteps = 20
 
 # Set configuration parameters
 config = {
     'min_size': 10,  # Minimum size of cloud objects to be considered
-    'l_condition': 0.0009, # kg/kg. Minimum threshold for liquid water
+    'l_condition': 0.001, # kg/kg. Minimum threshold for liquid water
     'w_condition': 0.0,  # m/s. Minimum condition for vertical velocity
     'w_switch': False,  # True if you want to use vertical velocity threshold
     'timestep_duration': 60,  # Duration between timesteps in seconds
@@ -45,7 +45,8 @@ config = {
     # New parameters for cloud tracking
     'match_safety_factor': 2.0,  # Safety factor for cloud point matching
     'bounding_box_safety_factor': 1.0,  # Safety factor for pre-filtering with centroids
-    'max_expected_cloud_speed': 20.0,  # Maximum expected cloud speed in m/s
+    'max_expected_cloud_speed': 30.0,  # Maximum expected cloud speed in m/s
+    'use_pre_filtering': True,  # Toggle to enable/disable centroid pre-filtering
 }
 
 # Function to calculate mean_w

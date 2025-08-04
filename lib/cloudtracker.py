@@ -40,6 +40,12 @@ class CloudTracker:
                 cloud.age = 0
                 self.cloud_tracks[cloud_id] = [cloud]
         else:
+            # Log whether pre-filtering is enabled
+            if self.config.get('use_pre_filtering', True):
+                print("Using centroid pre-filtering for cloud matching")
+            else:
+                print("Pre-filtering disabled - checking all possible matches")
+                
             # Pre-filter potential matches considering periodic boundaries
             potential_matches = self.pre_filter_cloud_matches(current_cloud_field)
             
@@ -247,8 +253,22 @@ class CloudTracker:
         Pre-filter potential cloud matches based on centroid proximity to reduce
         the number of expensive is_match() calls, while properly handling periodic boundaries.
         
+        When pre-filtering is disabled, returns all possible combinations.
+        
         Returns a dictionary mapping track_ids to lists of candidate cloud_ids.
         """
+        # Check if pre-filtering is disabled in config
+        if not self.config.get('use_pre_filtering', True):
+            # Return all possible combinations when disabled
+            potential_matches = {}
+            for track_id, track in self.cloud_tracks.items():
+                last_cloud = track[-1]
+                if last_cloud.is_active:
+                    # All current clouds are potential matches
+                    potential_matches[track_id] = list(current_cloud_field.clouds.keys())
+            return potential_matches
+        
+        # Original pre-filtering logic continues below
         potential_matches = {}
         
         # Skip if no tracks or clouds exist
@@ -326,10 +346,13 @@ class CloudTracker:
                 # Check if within search thresholds
                 if horiz_dist <= search_radius and vert_dist <= search_radius:
                     candidate_ids.append(cloud_id)
-        
+            
             if candidate_ids:
                 potential_matches[track_id] = candidate_ids
-        
+
+        total_candidates = sum(len(candidates) for candidates in potential_matches.values())
+        print(f"Pre-filtering found {total_candidates} potential matches across {len(potential_matches)} active tracks")
+    
         return potential_matches
 
     def get_tracks(self):
