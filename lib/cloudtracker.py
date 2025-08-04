@@ -32,7 +32,7 @@ class CloudTracker:
         
         new_matched_clouds = set()
         
-        # Dictionary to track cloud inheritance - maps current cloud_id to list of (parent_cloud, parent_track_id)
+        # Dictionary to track cloud inheritance
         cloud_inheritance = {}
 
         if not self.cloud_tracks:  # First timestep
@@ -40,17 +40,17 @@ class CloudTracker:
                 cloud.age = 0
                 self.cloud_tracks[cloud_id] = [cloud]
         else:
-            # FIRST PASS: Find all potential matches between previous and current clouds
-            for track_id, track in list(self.cloud_tracks.items()):
-                last_cloud_in_track = track[-1]
-                if not last_cloud_in_track.is_active:
-                    continue
-                    
-                # Find all potential fragments that match this cloud
-                for cloud_id, cloud in current_cloud_field.clouds.items():
-                    # Pass the cloud_field to is_match so it can use the pre-built KD-tree
+            # Pre-filter potential matches considering periodic boundaries
+            potential_matches = self.pre_filter_cloud_matches(current_cloud_field)
+            
+            # FIRST PASS: Process pre-filtered matches
+            for track_id, candidate_cloud_ids in potential_matches.items():
+                last_cloud_in_track = self.cloud_tracks[track_id][-1]
+                
+                # Only check pre-filtered candidate clouds
+                for cloud_id in candidate_cloud_ids:
+                    cloud = current_cloud_field.clouds[cloud_id]
                     if self.is_match(cloud, last_cloud_in_track, current_cloud_field):
-                        # Record this potential inheritance
                         if cloud_id not in cloud_inheritance:
                             cloud_inheritance[cloud_id] = []
                         cloud_inheritance[cloud_id].append((last_cloud_in_track, track_id))
@@ -241,6 +241,96 @@ class CloudTracker:
                     return True
     
         return False
+
+    def pre_filter_cloud_matches(self, current_cloud_field):
+        """
+        Pre-filter potential cloud matches based on centroid proximity to reduce
+        the number of expensive is_match() calls, while properly handling periodic boundaries.
+        
+        Returns a dictionary mapping track_ids to lists of candidate cloud_ids.
+        """
+        potential_matches = {}
+        
+        # Skip if no tracks or clouds exist
+        if not self.cloud_tracks or not current_cloud_field.clouds:
+            return potential_matches
+        
+        # Create arrays of cloud centroids
+        prev_centroids = []
+        prev_track_ids = []
+        
+        # Get centroids of active clouds from previous timestep
+        for track_id, track in self.cloud_tracks.items():
+            last_cloud = track[-1]
+            if last_cloud.is_active:
+                prev_centroids.append(last_cloud.location)
+                prev_track_ids.append(track_id)
+        
+        # Skip if no active clouds
+        if not prev_centroids:
+            return potential_matches
+            
+        prev_centroids = np.array(prev_centroids)
+        
+        # Get current cloud centroids
+        curr_centroids = []
+        curr_cloud_ids = []
+        
+        for cloud_id, cloud in current_cloud_field.clouds.items():
+            curr_centroids.append(cloud.location)
+            curr_cloud_ids.append(cloud_id)
+        
+        # Skip if no current clouds
+        if not curr_centroids:
+            return potential_matches
+            
+        curr_centroids = np.array(curr_centroids)
+        
+        # Physics-based search radius calculation
+        timestep_duration = self.config['timestep_duration']
+        max_speed = self.config.get('max_expected_cloud_speed', 30)  # m/s, reasonable default
+        
+        # Apply safety factor for the search radius
+        safety_factor = 3.0  # Conservative to ensure we don't miss matches
+        search_radius = max_speed * timestep_duration * safety_factor
+        
+        # For each previous cloud, find potential matches
+        for i, prev_centroid in enumerate(prev_centroids):
+            track_id = prev_track_ids[i]
+            candidate_ids = []
+            
+            # Extract coordinates for better readability
+            px, py, pz = prev_centroid
+            
+            # Check each current cloud, considering periodic boundaries
+            for j, (curr_centroid, cloud_id) in enumerate(zip(curr_centroids, curr_cloud_ids)):
+                cx, cy, cz = curr_centroid
+                
+                # Handle x-direction periodic boundary
+                dx = abs(cx - px)
+                if dx > self.domain_size_x / 2:
+                    dx = self.domain_size_x - dx
+                    
+                # Handle y-direction periodic boundary
+                dy = abs(cy - py)
+                if dy > self.domain_size_y / 2:
+                    dy = self.domain_size_y - dy
+                    
+                # Direct distance in z (non-periodic)
+                dz = abs(cz - pz)
+                
+                # Calculate effective horizontal and vertical distances
+                horiz_dist = np.sqrt(dx*dx + dy*dy)
+                vert_dist = dz
+                
+                # Check if within search thresholds
+                if horiz_dist <= search_radius and vert_dist <= search_radius:
+                    candidate_ids.append(cloud_id)
+        
+            if candidate_ids:
+                potential_matches[track_id] = candidate_ids
+        
+        return potential_matches
 
     def get_tracks(self):
         return self.cloud_tracks
