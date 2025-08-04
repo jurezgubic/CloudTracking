@@ -27,7 +27,7 @@ file_name = {
 output_netcdf_path = 'cloud_results.nc'
 
 # Set number of timesteps to process
-total_timesteps = 20
+total_timesteps = 5
 
 # Set configuration parameters
 config = {
@@ -116,8 +116,10 @@ def process_clouds(cloud_tracker):
         )
 
         gc.collect()
+        # Calculate and display time taken for this timestep
         stop = time.time()
-        print(f"Time taken: {(stop-start):.1f} seconds")
+        minutes_taken = (stop - start) / 60
+        print(f"Time taken: {minutes_taken:.1f} minutes")
     
     # After all timesteps, identify clouds still active at the end
     final_partial_tracks = [tid for tid, track in cloud_tracker.cloud_tracks.items() 
@@ -182,6 +184,9 @@ def finalize_partial_lifetime_tracks(cloud_tracker, total_timesteps):
 
 
 def main(delete_existing_file):
+    # Start total time timer
+    total_start_time = time.time()
+    
     # Delete the existing output file if the option is provided
     if delete_existing_file and os.path.exists(output_netcdf_path):
         os.remove(output_netcdf_path)
@@ -192,6 +197,11 @@ def main(delete_existing_file):
 
     # Process clouds - partial lifetime clouds will be marked as tainted (not removed)
     process_clouds(cloud_tracker)
+    
+    # Calculate and display total time
+    total_end_time = time.time()
+    total_minutes = (total_end_time - total_start_time) / 60
+    print(f"\nTotal execution time: {total_minutes:.1f} minutes")
 
 if __name__ == "__main__":
     # Parse command line arguments
