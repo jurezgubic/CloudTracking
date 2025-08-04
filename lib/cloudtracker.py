@@ -171,7 +171,7 @@ class CloudTracker:
         
         # Physics: The safety factor creates a buffer around the predicted location.
         # It accounts for the cloud's acceleration/deceleration between timesteps.
-        safety_factor = 2.0
+        safety_factor = self.config.get('match_safety_factor', 2.0)  # Get from config with default
 
         # --- Physics: Calculate a dynamic search radius based on the cloud's OWN velocity. ---
         # This ensures the search area is proportional to the cloud's specific momentum.
@@ -286,12 +286,12 @@ class CloudTracker:
             
         curr_centroids = np.array(curr_centroids)
         
-        # Physics-based search radius calculation
+        # Physics-based search radius calculation from config
         timestep_duration = self.config['timestep_duration']
-        max_speed = self.config.get('max_expected_cloud_speed', 30)  # m/s, reasonable default
+        max_speed = self.config.get('max_expected_cloud_speed')
         
-        # Apply safety factor for the search radius
-        safety_factor = 3.0  # Conservative to ensure we don't miss matches
+        # Apply safety factor for the search radius from config
+        safety_factor = self.config.get('bounding_box_safety_factor')
         search_radius = max_speed * timestep_duration * safety_factor
         
         # For each previous cloud, find potential matches

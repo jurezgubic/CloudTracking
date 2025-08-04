@@ -42,6 +42,10 @@ config = {
     'switch_wind_drift': True, # True if you want to subtract the wind drift
     'switch_vertical_drift': True,  # Enable vertical drift consideration
     'cloud_base_altitude': 700, # m, from input data analysis
+    # New parameters for cloud tracking
+    'match_safety_factor': 2.0,  # Safety factor for cloud point matching
+    'bounding_box_safety_factor': 1.0,  # Safety factor for pre-filtering with centroids
+    'max_expected_cloud_speed': 20.0,  # Maximum expected cloud speed in m/s
 }
 
 # Function to calculate mean_w
