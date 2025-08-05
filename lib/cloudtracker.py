@@ -50,16 +50,40 @@ class CloudTracker:
             potential_matches = self.pre_filter_cloud_matches(current_cloud_field)
             
             # FIRST PASS: Process pre-filtered matches
-            for track_id, candidate_cloud_ids in potential_matches.items():
-                last_cloud_in_track = self.cloud_tracks[track_id][-1]
+            if self.config.get('use_batch_processing', True):
+                # --- Use batch processing for better performance ---
+                import time
+                batch_size = self.config.get('batch_size', 50)
+                batch_start = time.time()
+                print(f"Using batch processing with batch size {batch_size}")
                 
-                # Only check pre-filtered candidate clouds
-                for cloud_id in candidate_cloud_ids:
-                    cloud = current_cloud_field.clouds[cloud_id]
-                    if self.is_match(cloud, last_cloud_in_track, current_cloud_field):
+                # Process matches in batches
+                batch_results = self.batch_process_matches(potential_matches, current_cloud_field, batch_size)
+                
+                # Convert batch results to cloud_inheritance format (exact same structure as original code)
+                for (cloud_id, track_id), is_match in batch_results.items():
+                    if is_match:
+                        cloud = current_cloud_field.clouds[cloud_id]
+                        last_cloud_in_track = self.cloud_tracks[track_id][-1]
+                        
                         if cloud_id not in cloud_inheritance:
                             cloud_inheritance[cloud_id] = []
                         cloud_inheritance[cloud_id].append((last_cloud_in_track, track_id))
+                
+                batch_end = time.time()
+                print(f"Batch processing completed in {batch_end - batch_start:.2f} seconds")
+            else:
+                # --- Original sequential processing logic ---
+                for track_id, candidate_cloud_ids in potential_matches.items():
+                    last_cloud_in_track = self.cloud_tracks[track_id][-1]
+                    
+                    # Only check pre-filtered candidate clouds
+                    for cloud_id in candidate_cloud_ids:
+                        cloud = current_cloud_field.clouds[cloud_id]
+                        if self.is_match(cloud, last_cloud_in_track, current_cloud_field):
+                            if cloud_id not in cloud_inheritance:
+                                cloud_inheritance[cloud_id] = []
+                            cloud_inheritance[cloud_id].append((last_cloud_in_track, track_id))
             
             # SECOND PASS: Handle merges and splits with proper age inheritance
             # Process merges first (clouds with multiple potential parents)
@@ -385,4 +409,173 @@ class CloudTracker:
 
     def get_tracks(self):
         return self.cloud_tracks
+
+    def batch_process_matches(self, potential_matches, current_cloud_field, batch_size=50):
+        """
+        Process potential matches in configurable-sized batches to balance memory usage and performance.
+        
+        Args:
+            potential_matches: Dictionary mapping track_ids to lists of candidate cloud_ids
+            current_cloud_field: CloudField object containing the KD-tree
+            batch_size: Number of (track_id, cloud_id) pairs to process in each batch
+            
+        Returns:
+            Dictionary mapping (cloud_id, track_id) to True/False indicating match status
+        """
+        import time  # Add at top of file if not already there
+        
+        # Skip if KD-tree doesn't exist
+        if current_cloud_field.surface_points_kdtree is None:
+            return {}
+        
+        # Create flattened list of all (track_id, cloud_id) pairs to process
+        all_pairs = []
+        for track_id, cloud_ids in potential_matches.items():
+            for cloud_id in cloud_ids:
+                all_pairs.append((track_id, cloud_id))
+        
+        total_pairs = len(all_pairs)
+        print(f"Processing {total_pairs} potential matches in batches of {batch_size}")
+        
+        # Process in batches
+        batch_results = {}
+        
+        for batch_start in range(0, total_pairs, batch_size):
+            batch_end = min(batch_start + batch_size, total_pairs)
+            current_batch = all_pairs[batch_start:batch_end]
+            
+            batch_start_time = time.time()
+            print(f"Processing batch {batch_start//batch_size + 1} of {(total_pairs + batch_size - 1)//batch_size}: " 
+                  f"pairs {batch_start+1}-{batch_end} of {total_pairs}")
+            
+            # Process this batch
+            batch_matches = self._process_match_batch(current_batch, current_cloud_field)
+            
+            # Update overall results
+            batch_results.update(batch_matches)
+            
+            batch_end_time = time.time()
+            print(f"  Batch completed in {batch_end_time - batch_start_time:.2f} seconds, " 
+                  f"found {len(batch_matches)} matches")
+            
+            # Optional: Force garbage collection after each batch
+            # import gc
+            # gc.collect()
+        
+        return batch_results
+
+    def _process_match_batch(self, batch_pairs, current_cloud_field):
+        """
+        Process a single batch of potential matches.
+        
+        Args:
+            batch_pairs: List of (track_id, cloud_id) pairs to check in this batch
+            current_cloud_field: CloudField object containing the KD-tree
+            
+        Returns:
+            Dictionary of match results for this batch
+        """
+        batch_results = {}
+        timestep_duration = self.config['timestep_duration']
+        safety_factor = self.config.get('match_safety_factor', 2.0)
+        
+        # Prepare data structures for batch processing
+        all_query_points = []
+        query_metadata = []  # (cloud_id, track_id, original_point_idx)
+        thresholds = []
+        
+        # For each pair in the batch
+        for track_id, cloud_id in batch_pairs:
+            # Get the relevant objects
+            last_cloud_in_track = self.cloud_tracks[track_id][-1]
+            cloud = current_cloud_field.clouds[cloud_id]
+            
+            # Skip invalid combinations early
+            if (not last_cloud_in_track.is_active or 
+                not last_cloud_in_track.surface_points.any()):
+                continue
+            
+            # Calculate cloud-specific thresholds
+            u_abs = abs(last_cloud_in_track.mean_u)
+            v_abs = abs(last_cloud_in_track.mean_v)
+            w_abs = abs(last_cloud_in_track.mean_w)
+            
+            horizontal_threshold = max(u_abs, v_abs) * timestep_duration * safety_factor
+            vertical_threshold = w_abs * timestep_duration * safety_factor
+            
+            # Minimum threshold for stationary clouds
+            horizontal_threshold = max(horizontal_threshold, 2 * self.config['horizontal_resolution'])
+            vertical_threshold = max(vertical_threshold, 2 * self.config['horizontal_resolution'])
+            
+            # Apply drift to previous cloud points
+            last_points = last_cloud_in_track.surface_points
+            dx = last_cloud_in_track.mean_u * timestep_duration
+            dy = last_cloud_in_track.mean_v * timestep_duration
+            dz = last_cloud_in_track.mean_w * timestep_duration
+            adjusted_points = last_points + [dx, dy, dz]
+            
+            # Handle cyclic boundaries
+            points_sets = [adjusted_points]
+            if np.any(adjusted_points[:, 0] < self.xt[0] + horizontal_threshold):
+                points_sets.append(adjusted_points + [self.domain_size_x, 0, 0])
+            if np.any(adjusted_points[:, 0] > self.xt[-1] - horizontal_threshold):
+                points_sets.append(adjusted_points - [self.domain_size_x, 0, 0])
+            if np.any(adjusted_points[:, 1] < self.yt[0] + horizontal_threshold):
+                points_sets.append(adjusted_points + [0, self.domain_size_y, 0])
+            if np.any(adjusted_points[:, 1] > self.yt[-1] - horizontal_threshold):
+                points_sets.append(adjusted_points - [0, self.domain_size_y, 0])
+            
+            # Add all points to the query batch
+            for point_set in points_sets:
+                for i, point in enumerate(point_set):
+                    all_query_points.append(point)
+                    query_metadata.append((cloud_id, track_id, i))
+                    thresholds.append((horizontal_threshold, vertical_threshold))
+        
+        # Skip if no valid query points
+        if not all_query_points:
+            return batch_results
+        
+        # Convert to numpy arrays for vectorized processing
+        all_query_points = np.array(all_query_points)
+        horizontal_thresholds = np.array([t[0] for t in thresholds])
+        
+        # Execute batch KD-tree query
+        nearby_indices_list = current_cloud_field.surface_points_kdtree.query_ball_point(
+            all_query_points[:, :2], 
+            r=horizontal_thresholds
+        )
+        
+        # Process query results
+        for i, indices in enumerate(nearby_indices_list):
+            if not indices:
+                continue
+                
+            cloud_id, track_id, point_idx = query_metadata[i]
+            horizontal_threshold, vertical_threshold = thresholds[i]
+            
+            # If match already found for this pair, skip
+            if (cloud_id, track_id) in batch_results:
+                continue
+            
+            # Get cloud IDs for nearby points
+            nearby_cloud_ids = np.unique(current_cloud_field.surface_point_to_cloud_id[indices])
+            
+            # Check if the cloud is among the nearby points
+            if cloud_id in nearby_cloud_ids:
+                # Get only points belonging to the current cloud
+                current_cloud_mask = current_cloud_field.surface_point_to_cloud_id[indices] == cloud_id
+                current_point_indices = np.array(indices)[current_cloud_mask]
+                
+                if len(current_point_indices) == 0:
+                    continue
+                
+                # Check vertical proximity
+                last_z = all_query_points[i, 2]
+                current_z_values = current_cloud_field.surface_points_array[current_point_indices, 2]
+                
+                if np.any(np.abs(current_z_values - last_z) <= vertical_threshold):
+                    batch_results[(cloud_id, track_id)] = True
+        
+        return batch_results
 
