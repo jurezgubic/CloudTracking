@@ -11,6 +11,7 @@ __pycache__/
 
 # All analysis results
 analysis_output/
+cloud_surface_visualizations/
 
 # Any animations (mp4)
 *.mp4
