@@ -134,6 +134,34 @@ class CloudTracker:
                     # Start a new track
                     self.cloud_tracks[cloud_id] = [cloud]
 
+        # Add after all matching is complete
+        new_clouds_count = 0
+        matched_clouds_count = 0
+        merged_clouds_count = 0
+        split_clouds_count = 0
+        inactive_clouds_count = 0
+
+        for track_id, track in self.cloud_tracks.items():
+            last_cloud = track[-1]
+            if not last_cloud.is_active:
+                inactive_clouds_count += 1
+            elif last_cloud.timestep == current_cloud_field.timestep:
+                if len(track) == 1:
+                    new_clouds_count += 1
+                elif hasattr(last_cloud, 'is_split') and last_cloud.is_split:
+                    split_clouds_count += 1
+                elif hasattr(last_cloud, 'is_merged') and last_cloud.is_merged:
+                    merged_clouds_count += 1
+                else:
+                    matched_clouds_count += 1
+
+        print(f"Cloud tracking summary:")
+        print(f"  New clouds: {new_clouds_count}")
+        print(f"  Matched clouds: {matched_clouds_count}")
+        print(f"  Merged clouds: {merged_clouds_count}")
+        print(f"  Split clouds: {split_clouds_count}")
+        print(f"  Inactive clouds: {inactive_clouds_count}")
+
     # This function is deprecated by the more complex logic in update_tracks
     # but is kept here for reference or simpler tracking scenarios.
     def match_clouds(self, current_cloud_field):
@@ -175,11 +203,11 @@ class CloudTracker:
 
         timestep_duration = self.config['timestep_duration']
         
-        # Physics: The safety factor creates a buffer around the predicted location.
+        # The safety factor creates a buffer around the predicted location.
         # It accounts for the cloud's acceleration/deceleration between timesteps.
-        safety_factor = self.config.get('match_safety_factor', 2.0)  # Get from config with default
+        safety_factor = self.config.get('match_safety_factor', 2.0) 
 
-        # --- Physics: Calculate a dynamic search radius based on the cloud's OWN velocity. ---
+        # --- Calculate a dynamic search radius based on the cloud's OWN velocity. ---
         # This ensures the search area is proportional to the cloud's specific momentum.
         # A cloud with high velocity will have a larger search radius.
         u_abs = abs(last_cloud_in_track.mean_u)

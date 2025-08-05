@@ -9,12 +9,12 @@ import os
 import sys
 
 # Configuration parameters
-height_threshold = 900  # Minimum height for cloud initiation (m)
+height_threshold = 750  # Minimum height for cloud initiation (m)
 min_lifetime_minutes = 5  # Minimum cloud lifetime (minutes)
 timestep_duration_seconds = 60  # Duration between timesteps (seconds)
 min_timesteps = int(min_lifetime_minutes * 60 / timestep_duration_seconds)
 output_folder = 'cloud_surface_visualizations'  # Folder to store visualizations
-l_condition = 0.001  # Liquid water content threshold (kg/kg)
+l_condition = 0.00001  # Liquid water content threshold (kg/kg)
 
 # Path to original LES data
 base_file_path = '/Users/jure/PhD/coding/RICO_1hr/'
@@ -27,7 +27,7 @@ def find_high_initiated_clouds():
     """Find clouds that initiate above the height threshold with minimum lifetime."""
     print("Finding clouds initiated above cloud base...")
     # Load the cloud tracking data
-    filename = '../cloud_results.nc'
+    filename = '../cloud_results_0.00001_12min.nc'
     with Dataset(filename, 'r') as nc:
         # Get variables
         valid_track = nc.variables['valid_track'][:]
