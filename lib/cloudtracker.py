@@ -2,6 +2,7 @@ import utils.plotting_utils as plotting_utils
 import math
 import numpy as np
 import gc
+import time
 from memory_profiler import profile
 from scipy.spatial import cKDTree
 
@@ -53,8 +54,7 @@ class CloudTracker:
             if self.config.get('use_batch_processing', True):
                 # --- Use batch processing for better performance ---
                 import time
-                batch_size = self.config.get('batch_size', 50)
-                batch_start = time.time()
+                batch_size = self.config.get('batch_size', 10)
                 print(f"Using batch processing with batch size {batch_size}")
                 
                 # Process matches in batches
@@ -69,9 +69,6 @@ class CloudTracker:
                         if cloud_id not in cloud_inheritance:
                             cloud_inheritance[cloud_id] = []
                         cloud_inheritance[cloud_id].append((last_cloud_in_track, track_id))
-                
-                batch_end = time.time()
-                print(f"Batch processing completed in {batch_end - batch_start:.2f} seconds")
             else:
                 # --- Original sequential processing logic ---
                 for track_id, candidate_cloud_ids in potential_matches.items():
@@ -410,7 +407,7 @@ class CloudTracker:
     def get_tracks(self):
         return self.cloud_tracks
 
-    def batch_process_matches(self, potential_matches, current_cloud_field, batch_size=50):
+    def batch_process_matches(self, potential_matches, current_cloud_field, batch_size=10):
         """
         Process potential matches in configurable-sized batches to balance memory usage and performance.
         
@@ -422,7 +419,6 @@ class CloudTracker:
         Returns:
             Dictionary mapping (cloud_id, track_id) to True/False indicating match status
         """
-        import time  # Add at top of file if not already there
         
         # Skip if KD-tree doesn't exist
         if current_cloud_field.surface_points_kdtree is None:
@@ -444,23 +440,18 @@ class CloudTracker:
             batch_end = min(batch_start + batch_size, total_pairs)
             current_batch = all_pairs[batch_start:batch_end]
             
-            batch_start_time = time.time()
-            print(f"Processing batch {batch_start//batch_size + 1} of {(total_pairs + batch_size - 1)//batch_size}: " 
-                  f"pairs {batch_start+1}-{batch_end} of {total_pairs}")
+            print(f"Processing batch {batch_start//batch_size + 1} of {(total_pairs + batch_size - 1)//batch_size}.")
             
             # Process this batch
             batch_matches = self._process_match_batch(current_batch, current_cloud_field)
             
             # Update overall results
             batch_results.update(batch_matches)
-            
-            batch_end_time = time.time()
-            print(f"  Batch completed in {batch_end_time - batch_start_time:.2f} seconds, " 
-                  f"found {len(batch_matches)} matches")
-            
+
+            print(f"found {len(batch_matches)} matches")
+
             # Optional: Force garbage collection after each batch
-            # import gc
-            # gc.collect()
+            gc.collect()
         
         return batch_results
 

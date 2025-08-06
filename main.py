@@ -28,7 +28,7 @@ file_name = {
 }
 
 # Processing Options
-total_timesteps = 9  # Number of timesteps to process
+total_timesteps = 15  # Number of timesteps to process
 
 # Cloud Definition and Tracking Configuration
 config = {
@@ -50,8 +50,8 @@ config = {
     # Matching parameters
     'distance_threshold': 0,     # Max distance between merging clouds across a periodic boundary.
     'match_safety_factor': 2.0,  # Safety factor for matching clouds based on point overlap.
-    'bounding_box_safety_factor': 1.0, # Safety factor for pre-filtering potential matches (using centroids).
-    'max_expected_cloud_speed': 10.0,  # m/s. An estimate to constrain the search space for matching.
+    'bounding_box_safety_factor': 1.5, # Safety factor for pre-filtering potential matches (using centroids).
+    'max_expected_cloud_speed': 30.0,  # m/s. An estimate to constrain the search space for matching.
     'use_pre_filtering': True,   # If True, use a pre-filtering step to find potential matches (speed up matching).
 
     # Visualisation (somewhat deprecated)
