@@ -410,6 +410,7 @@ class CloudTracker:
     def batch_process_matches(self, potential_matches, current_cloud_field, batch_size=10):
         """
         Process potential matches in configurable-sized batches to balance memory usage and performance.
+        Memory leak issue?
         
         Args:
             potential_matches: Dictionary mapping track_ids to lists of candidate cloud_ids
@@ -433,7 +434,7 @@ class CloudTracker:
         total_pairs = len(all_pairs)
         print(f"Processing {total_pairs} potential matches in batches of {batch_size}")
         
-        # Process in batches
+        # Process in batches 
         batch_results = {}
         
         for batch_start in range(0, total_pairs, batch_size):
