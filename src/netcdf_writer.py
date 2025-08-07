@@ -43,6 +43,10 @@ def initialize_netcdf(file_path, zt):
         # Add merged_into variable to track which clouds merged into others
         merged_into_var = root_grp.createVariable('merged_into', 'i4', ('track', 'time'), fill_value=-1)
 
+        merges_count_var = root_grp.createVariable('merges_count', 'i4', ('track', 'time'), fill_value=0)
+        splits_count_var = root_grp.createVariable('splits_count', 'i4', ('track', 'time'), fill_value=0)
+        split_from_var = root_grp.createVariable('split_from', 'i4', ('track', 'time'), fill_value=-1)
+
         height_var = root_grp.createVariable('height', 'f4', ('level', ))
         height_var[:] = zt  # Assign the height values
 
@@ -84,6 +88,10 @@ def write_cloud_tracks_to_netcdf(tracks, track_id_to_index, tainted_tracks, env_
         valid_track_var = root_grp.variables['valid_track']  # We can reference it if needed
         merged_into_var = root_grp.variables['merged_into']
         track_id_var = root_grp.variables['track_id']  # New variable for track IDs
+
+        merges_count_var = root_grp.variables['merges_count']
+        splits_count_var = root_grp.variables['splits_count']
+        split_from_var = root_grp.variables['split_from']
 
         # Write environment data for this timestep
         if env_mass_flux_per_level is not None:
@@ -137,6 +145,18 @@ def write_cloud_tracks_to_netcdf(tracks, track_id_to_index, tainted_tracks, env_
                 #cloud_points_var[i, timestep, :len(points), :] = points
                 age_var[i, timestep] = cloud.age
                 cloud_base_height_var[i, timestep] = cloud.cloud_base_height
+                
+                # Write merge and split tracking data
+                merges_count_var[i, timestep] = cloud.merges_count
+                splits_count_var[i, timestep] = cloud.splits_count
+                
+                # Write split_from information if available
+                if hasattr(cloud, 'split_from') and cloud.split_from is not None:
+                    # Convert track ID to index
+                    if cloud.split_from in track_id_to_index:
+                        split_from_var[i, timestep] = track_id_to_index[cloud.split_from]
+                    else:
+                        split_from_var[i, timestep] = -2  # Unknown parent track
 
                 # Move this check INSIDE the if-block to prevent UnboundLocalError
                 if not cloud.is_active and cloud.merged_into is not None:

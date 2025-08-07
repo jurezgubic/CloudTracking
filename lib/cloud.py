@@ -5,7 +5,7 @@ class Cloud:
                  size, 
                  surface_area, 
                  cloud_base_area,
-                 cloud_base_height,  # Add new parameter
+                 cloud_base_height,
                  location, 
                  points, 
                  surface_points,
@@ -53,6 +53,12 @@ class Cloud:
         self.is_active = is_active
         self.age = age
         self.merged_into = None  # Track ID this cloud merged into, if any
+
+        # Merges and splits
+        self.merges_count = 0      # Number of times this cloud has merged with others
+        self.splits_count = 0      # Number of times this cloud has split from others
+        self.merged_with = []      # List of cloud IDs this cloud has merged with
+        self.split_from = None     # Cloud ID this cloud split from (if any)
 
     def update_max_height(self, new_height):
         """ Update the max height of the cloud """

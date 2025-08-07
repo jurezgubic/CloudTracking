@@ -35,6 +35,10 @@ class CloudTracker:
         # Dictionary to track cloud inheritance
         cloud_inheritance = {}
 
+        # Counter for merges and splits
+        merges_count = 0
+        splits_count = 0
+
         if not self.cloud_tracks:  # First timestep
             for cloud_id, cloud in current_cloud_field.clouds.items():
                 cloud.age = 0
@@ -77,6 +81,17 @@ class CloudTracker:
                 self.cloud_tracks[oldest_parent_track_id].append(cloud)
                 new_matched_clouds.add(cloud_id)
                 
+                # Record merge information
+                cloud.merges_count += 1
+                
+                # Keep track of which clouds merged to form this cloud
+                for parent, parent_track_id in parent_list:
+                    if parent_track_id != oldest_parent_track_id:
+                        cloud.merged_with.append(parent_track_id)
+                        
+                # Count merges for reporting
+                merges_count += 1
+                
                 # Mark other parents as merged
                 for parent, parent_track_id in parent_list[1:]:
                     if parent_track_id != oldest_parent_track_id:
@@ -84,6 +99,28 @@ class CloudTracker:
                         parent.merged_into = oldest_parent_track_id
             
             # THIRD PASS: Process regular matches and splits
+            # Identify potential splits (one parent with multiple children)
+            potential_splits = {}
+            for cloud_id, parent_list in cloud_inheritance.items():
+                if len(parent_list) == 1:  # Only consider single-parent cases for splits
+                    parent, parent_track_id = parent_list[0]
+                    if parent_track_id not in potential_splits:
+                        potential_splits[parent_track_id] = []
+                    potential_splits[parent_track_id].append(cloud_id)
+            
+            # Process splits - a split occurs when one parent has multiple children
+            for parent_track_id, child_cloud_ids in potential_splits.items():
+                if len(child_cloud_ids) > 1:  # More than one child = split
+                    for child_id in child_cloud_ids:
+                        if child_id not in new_matched_clouds:  # Not already handled as a merge
+                            child_cloud = current_cloud_field.clouds[child_id]
+                            # Mark as split
+                            child_cloud.splits_count += 1
+                            child_cloud.split_from = parent_track_id
+                            
+                            # Count splits for reporting
+                            splits_count += 1
+            
             for track_id, track in list(self.cloud_tracks.items()):
                 last_cloud_in_track = track[-1]
                 if not last_cloud_in_track.is_active:
@@ -126,7 +163,15 @@ class CloudTracker:
                         parents = cloud_inheritance[cloud_id]
                         parents.sort(key=lambda x: x[0].age, reverse=True)
                         parent_cloud = parents[0][0]
+                        parent_track_id = parents[0][1]
                         cloud.age = parent_cloud.age + 1
+                        
+                        # If this cloud has a single parent but is starting a new track,
+                        # it's likely a split that wasn't identified as a primary continuation
+                        if len(parents) == 1 and cloud.split_from is None:
+                            cloud.splits_count += 1
+                            cloud.split_from = parent_track_id
+                            splits_count += 1
                     else:
                         # This is a genuinely new cloud
                         cloud.age = 0
@@ -137,8 +182,6 @@ class CloudTracker:
         # Add after all matching is complete
         new_clouds_count = 0
         matched_clouds_count = 0
-        merged_clouds_count = 0
-        split_clouds_count = 0
         inactive_clouds_count = 0
 
         for track_id, track in self.cloud_tracks.items():
@@ -148,18 +191,14 @@ class CloudTracker:
             elif last_cloud.timestep == current_cloud_field.timestep:
                 if len(track) == 1:
                     new_clouds_count += 1
-                elif hasattr(last_cloud, 'is_split') and last_cloud.is_split:
-                    split_clouds_count += 1
-                elif hasattr(last_cloud, 'is_merged') and last_cloud.is_merged:
-                    merged_clouds_count += 1
                 else:
                     matched_clouds_count += 1
 
         print(f"Cloud tracking summary:")
         print(f"  New clouds: {new_clouds_count}")
         print(f"  Matched clouds: {matched_clouds_count}")
-        print(f"  Merged clouds: {merged_clouds_count}")
-        print(f"  Split clouds: {split_clouds_count}")
+        print(f"  Merged clouds: {merges_count}")
+        print(f"  Split clouds: {splits_count}")
         print(f"  Inactive clouds: {inactive_clouds_count}")
 
     # This function is deprecated by the more complex logic in update_tracks
