@@ -27,7 +27,7 @@ def find_high_initiated_clouds():
     """Find clouds that initiate above the height threshold with minimum lifetime."""
     print("Finding clouds initiated above cloud base...")
     # Load the cloud tracking data
-    filename = '../cloud_results_0.00001_12min.nc'
+    filename = '../cloud_results.nc'
     with Dataset(filename, 'r') as nc:
         # Get variables
         valid_track = nc.variables['valid_track'][:]
