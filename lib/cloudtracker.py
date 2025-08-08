@@ -135,11 +135,12 @@ class CloudTracker:
                         for parent, parent_track_id in cloud_inheritance[cloud_id]:
                             if parent_track_id == track_id:
                                 # Update max height if needed
-                                current_max_height = np.max(cloud.points[:, 2])
-                                if current_max_height > last_cloud_in_track.max_height:
-                                    last_cloud_in_track.max_height = current_max_height
-                                
-                                # Continue the track with this fragment
+                                # Keep per-timestep max_height as computed in CloudField
+                                # Old timestep which was back-propagated into the previous timestep:
+                                # current_max_height = np.max(cloud.points[:, 2])
+                                # if current_max_height > last_cloud_in_track.max_height:
+                                #     last_cloud_in_track.max_height = current_max_height
+
                                 cloud.age = last_cloud_in_track.age + 1
                                 track.append(cloud)
                                 new_matched_clouds.add(cloud_id)
