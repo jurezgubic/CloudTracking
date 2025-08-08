@@ -124,8 +124,7 @@ def write_cloud_tracks_to_netcdf(tracks, track_id_to_index, tainted_tracks, env_
             clouds_at_timestep = [c for c in track if c.timestep == timestep]
             
             if clouds_at_timestep:
-                cloud = clouds_at_timestep[0]  # There should be at most one cloud per track per timestep
-                
+                cloud = clouds_at_timestep[0]
                 # Write cloud data to its stable index location
                 size_var[i, timestep] = cloud.size
                 max_height_var[i, timestep] = cloud.max_height
@@ -167,6 +166,15 @@ def write_cloud_tracks_to_netcdf(tracks, track_id_to_index, tainted_tracks, env_
                         # If the target track doesn't have an index yet (shouldn't happen)
                         merged_into_var[i, timestep] = -2
             else:
+                # if a merge occurred at t-1, record it now
+                if timestep > 0 and track:
+                    last_cloud = track[-1]
+                    if (last_cloud.timestep == timestep - 1) and (not last_cloud.is_active) and (last_cloud.merged_into is not None):
+                        if last_cloud.merged_into in track_id_to_index:
+                            merged_into_var[i, timestep - 1] = track_id_to_index[last_cloud.merged_into]
+                        else:
+                            merged_into_var[i, timestep - 1] = -2  # Unknown target
+
                 # Set current and future entries to NaN for inactive clouds
                 size_var[i, timestep:] = np.nan
                 max_height_var[i, timestep:] = np.nan
@@ -187,7 +195,5 @@ def write_cloud_tracks_to_netcdf(tracks, track_id_to_index, tainted_tracks, env_
                 loc_z_var[i, timestep:] = np.nan
                 #cloud_points_var[i, timestep:, :, :] = np.nan
                 age_var[i, timestep:] = -1
-
-                # Instead, simply set the merged_into field to the default "not merged" value
-                merged_into_var[i, timestep] = -1  # -1 means not merged
+                merged_into_var[i, timestep] = -1  # not merged at this (empty) time
 
