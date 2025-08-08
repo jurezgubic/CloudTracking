@@ -134,7 +134,6 @@ class CloudTracker:
                         # Check if this track is in the potential parents
                         for parent, parent_track_id in cloud_inheritance[cloud_id]:
                             if parent_track_id == track_id:
-                                # Update max height if needed
                                 # Keep per-timestep max_height as computed in CloudField
                                 # Old timestep which was back-propagated into the previous timestep:
                                 # current_max_height = np.max(cloud.points[:, 2])
@@ -415,8 +414,13 @@ class CloudTracker:
                 if horiz_dist <= search_radius and vert_dist <= search_radius:
                     candidate_ids.append(cloud_id)
             
-            if candidate_ids:
-                potential_matches[track_id] = candidate_ids
+            # Fallback: if no candidates via centroid, try all clouds so is_match() can rescue via surface overlap
+            # To Do: Consider how much this fallback slows down the matching process
+            if not candidate_ids and self.config.get('use_pre_filtering', True):
+                candidate_ids = list(current_cloud_field.clouds.keys())
+
+            # Always register the track, even if candidate_ids ends up empty
+            potential_matches[track_id] = candidate_ids
 
         total_candidates = sum(len(candidates) for candidates in potential_matches.values())
         print(f"Pre-filtering found {total_candidates} potential matches across {len(potential_matches)} active tracks")
