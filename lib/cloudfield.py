@@ -377,13 +377,25 @@ class CloudField:
                     # Calculate total mass flux
                     mass_flux = np.nansum(mass_flux_per_level)
                     
+                    # Create points array
+                    points = np.column_stack([
+                        xt[point_indices[:, 2]],
+                        yt[point_indices[:, 1]],
+                        zt[point_indices[:, 0]]
+                    ])
+
+                    # Physical centroid in (x,y,z)
+                    phys_centroid = points.mean(axis=0)
+
                     # Create a Cloud object and store it
                     clouds[cloud_id] = Cloud(
                         cloud_id=cloud_id,
                         size=region.area,
                         surface_area=surface_area,
-                        location=(xt[int(region.centroid[2])], yt[int(region.centroid[1])], zt[int(region.centroid[0])]),
-                        points=points,  # Pass NumPy array
+                        # location=(xt[int(region.centroid[2])], yt[int(region.centroid[1])], zt[int(region.centroid[0])]),
+                        # changed: use physical centroid, not floored index centroid
+                        location=(phys_centroid[0], phys_centroid[1], phys_centroid[2]),
+                        points=points,
                         surface_points=surface_points,
                         max_height=max_height,
                         max_w=max_w,
@@ -401,7 +413,7 @@ class CloudField:
                         circum_per_level=circum_per_level,
                         eff_radius_per_level=eff_radius_per_level,
                         timestep=self.timestep,
-                        cloud_base_height=min_height  # This correctly assigns the lowest point's height
+                        cloud_base_height=min_height
                     )
             
             # Force garbage collection after each batch
