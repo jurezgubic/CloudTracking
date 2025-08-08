@@ -115,6 +115,30 @@ def process_clouds(cloud_tracker):
             if newly_tainted:
                 print(f"Marked {len(newly_tainted)} clouds as tainted due to merging with incomplete tracks")
 
+            # forward tainting — if any tainted track merged into a target cloud, taint the target cloud too
+            def _collect_merge_recipients_of_tainted(tracks, tainted_ids):
+                """Return set of track_ids that received a merge from any tainted track."""
+                recipients = set()
+                for trackid, clouds in tracks.items():
+                    if trackid not in tainted_ids:
+                        continue
+                    for cloud in clouds:
+                        target = getattr(cloud, 'merged_into', None)
+                        if target is not None:
+                            recipients.add(target)
+                return recipients
+
+            tainted_targets = _collect_merge_recipients_of_tainted(
+                cloud_tracker.cloud_tracks, cloud_tracker.tainted_tracks
+            )
+
+            # Apply forward tainting (count only truly new)
+            new_targets = tainted_targets - cloud_tracker.tainted_tracks
+            if new_targets:
+                cloud_tracker.tainted_tracks.update(new_targets)
+                tainted_count += len(new_targets)
+                print(f"Forward-tainted {len(new_targets)} merge recipients (absorbed tainted parents)")
+
         # Assign a stable, unique index for each track for NetCDF output.
         for track_id in cloud_tracker.cloud_tracks:
             if track_id not in cloud_tracker.track_id_to_index:
