@@ -28,7 +28,7 @@ file_name = {
 }
 
 # Processing Options
-total_timesteps = 15  # Number of timesteps to process
+total_timesteps = 30  # Number of timesteps to process
 
 # Cloud Definition and Tracking Configuration
 config = {
@@ -45,12 +45,12 @@ config = {
     # Physics-based Adjustments
     'switch_wind_drift': True,   # If True, consider the mean horizontal motion in tracking.
     'switch_vertical_drift': True, # If True, consider the mean vertical motion in tracking.
-    'cloud_base_altitude': 700,  # m. Estimated cloud base altitude for certain calculations (kind of deprecated)
+    'cloud_base_altitude': 650,  # m. Estimated cloud base altitude for certain calculations
 
     # Matching parameters
     'distance_threshold': 0,     # Max distance between merging clouds across a periodic boundary.
-    'match_safety_factor': 2.0,  # Safety factor for matching clouds based on point overlap.
-    'bounding_box_safety_factor': 2.0, # Safety factor for pre-filtering potential matches (using centroids).
+    'match_safety_factor': 2.5,  # Safety factor for matching clouds based on point overlap.
+    'bounding_box_safety_factor': 1.0, # Safety factor for pre-filtering potential matches (using centroids).
     'max_expected_cloud_speed': 30.0,  # m/s. An estimate to constrain the search space for matching.
     'use_pre_filtering': True,   # If True, use a pre-filtering step to find potential matches (speed up matching).
 
@@ -72,22 +72,45 @@ def calculate_mean_vertical_velocity(file_path, file_names, timestep):
     mean_w = np.mean(w_data, axis=(1, 2))  # Average over y and x dimensions
     return mean_w
 
+def resolve_cloud_base_altitude(config, z_levels):
+    """
+    Resolve user-provided cloud_base_altitude (meters) to nearest model level.
+    Stores:
+      config['cloud_base_level_index']
+      config['cloud_base_altitude_resolved']
+    """
+    target = config.get('cloud_base_altitude', None)
+    if target is None:
+        raise ValueError("config must contain 'cloud_base_altitude'")
+    z_arr = np.asarray(z_levels, dtype=float)
+    if z_arr.ndim != 1 or z_arr.size == 0:
+        raise ValueError("z_levels must be a 1D non-empty array")
+    idx = int(np.abs(z_arr - target).argmin())
+    resolved = float(z_arr[idx])
+    config['cloud_base_level_index'] = idx
+    config['cloud_base_altitude_resolved'] = resolved
+    print(f"Cloud base requested at {target}m. Nearest resolved (and used) height is {resolved}m.")
+
 # @profile
 def process_clouds(cloud_tracker):
     """Process clouds and mark partial lifecycle clouds as tainted."""
     tainted_count = 0
+    base_resolved = False
     
     for timestep in range(total_timesteps):
         start = time.time()
         print("-"*50)
         print(f"Processing timestep {timestep+1} of {total_timesteps}")
 
-        # Load cloud field for the current timestep
         cloud_field = data_management.load_cloud_field_from_file(
             base_file_path, file_name, timestep, config
         )
 
-        # Core tracking step: match current clouds to existing tracks.
+        # Resolve base altitude once (after first load when zt is known)
+        if not base_resolved:
+            resolve_cloud_base_altitude(config, cloud_field.zt)
+            base_resolved = True
+
         cloud_tracker.update_tracks(cloud_field, cloud_field.zt, cloud_field.xt, cloud_field.yt)
 
         # Handle Partial Lifecycles (Tainted tracks)
