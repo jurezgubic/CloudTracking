@@ -53,6 +53,14 @@ def initialize_netcdf(file_path, zt):
         # Add cloud base height variable
         root_grp.createVariable('cloud_base_height', 'f4', ('track', 'time'), fill_value=np.nan)
 
+        root_grp.createVariable('area_per_level', 'f4', ('track','time','level'), fill_value=np.nan)
+        root_grp.createVariable('equiv_radius_per_level', 'f4', ('track','time','level'), fill_value=np.nan)
+        root_grp.createVariable('compactness_per_level', 'f4', ('track','time','level'), fill_value=np.nan)
+        root_grp.createVariable('base_radius_prescribed', 'f4', ('track','time'), fill_value=np.nan)
+        root_grp.createVariable('base_radius_diagnosed', 'f4', ('track','time'), fill_value=np.nan)
+        root_grp.createVariable('base_area_diagnosed', 'f4', ('track','time'), fill_value=np.nan)
+        root_grp.createVariable('max_equiv_radius', 'f4', ('track','time'), fill_value=np.nan)
+
 
 def write_cloud_tracks_to_netcdf(tracks, track_id_to_index, tainted_tracks, env_mass_flux_per_level, file_path, timestep, zt):
     """Write cloud tracking data to a NetCDF file for a given timestep using stable indices."""
@@ -92,6 +100,13 @@ def write_cloud_tracks_to_netcdf(tracks, track_id_to_index, tainted_tracks, env_
         merges_count_var = root_grp.variables['merges_count']
         splits_count_var = root_grp.variables['splits_count']
         split_from_var = root_grp.variables['split_from']
+        area_per_level_var = root_grp.variables['area_per_level']
+        equiv_radius_per_level_var = root_grp.variables['equiv_radius_per_level']
+        compactness_per_level_var = root_grp.variables['compactness_per_level']
+        base_radius_prescribed_var = root_grp.variables['base_radius_prescribed']
+        base_radius_diagnosed_var = root_grp.variables['base_radius_diagnosed']
+        base_area_diagnosed_var = root_grp.variables['base_area_diagnosed']
+        max_equiv_radius_var = root_grp.variables['max_equiv_radius']
 
         # Write environment data for this timestep
         if env_mass_flux_per_level is not None:
@@ -144,6 +159,14 @@ def write_cloud_tracks_to_netcdf(tracks, track_id_to_index, tainted_tracks, env_
                 #cloud_points_var[i, timestep, :len(points), :] = points
                 age_var[i, timestep] = cloud.age
                 cloud_base_height_var[i, timestep] = cloud.cloud_base_height
+                area_per_level_var[i, timestep, :] = cloud.area_per_level
+                equiv_radius_per_level_var[i, timestep, :] = cloud.equiv_radius_per_level
+                compactness_per_level_var[i, timestep, :] = cloud.compactness_per_level
+                base_radius_prescribed_var[i, timestep] = (np.sqrt(cloud.cloud_base_area/np.pi)
+                                                           if cloud.cloud_base_area > 0 else np.nan)
+                base_radius_diagnosed_var[i, timestep] = cloud.base_radius_diagnosed
+                base_area_diagnosed_var[i, timestep] = cloud.base_area_diagnosed
+                max_equiv_radius_var[i, timestep] = cloud.max_equiv_radius
                 
                 # Write merge and split tracking data
                 merges_count_var[i, timestep] = cloud.merges_count
@@ -196,4 +219,11 @@ def write_cloud_tracks_to_netcdf(tracks, track_id_to_index, tainted_tracks, env_
                 #cloud_points_var[i, timestep:, :, :] = np.nan
                 age_var[i, timestep:] = -1
                 merged_into_var[i, timestep] = -1  # not merged at this (empty) time
+                area_per_level_var[i, timestep:, :] = np.nan
+                equiv_radius_per_level_var[i, timestep:, :] = np.nan
+                compactness_per_level_var[i, timestep:, :] = np.nan
+                base_radius_prescribed_var[i, timestep:] = np.nan
+                base_radius_diagnosed_var[i, timestep:] = np.nan
+                base_area_diagnosed_var[i, timestep:] = np.nan
+                max_equiv_radius_var[i, timestep:] = np.nan
 

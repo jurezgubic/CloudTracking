@@ -344,7 +344,10 @@ class CloudField:
                     temp_per_level = np.full(n_levels, np.nan)
                     w_per_level = np.full(n_levels, np.nan)
                     circum_per_level = np.full(n_levels, np.nan)
-                    eff_radius_per_level = np.full(n_levels, np.nan)
+                    eff_radius_per_level = np.full(n_levels, np.nan)  # legacy compactness ratio
+                    area_per_level = np.full(n_levels, np.nan)
+                    equiv_radius_per_level = np.full(n_levels, np.nan)
+                    compactness_per_level = np.full(n_levels, np.nan)
                     
                     # Get unique z levels and their counts
                     unique_z_levels, z_level_counts = np.unique(point_indices[:, 0], return_counts=True)
@@ -367,15 +370,45 @@ class CloudField:
                         # Calculate circumference and effective radius
                         cloud_slice = updated_labeled_array[z_level_idx, :, :] == region.label
                         if np.any(cloud_slice):
-                            perimeter = measure.perimeter(cloud_slice, neighborhood=8)
-                            circum_per_level[z_level_idx] = perimeter * config['horizontal_resolution']
-                            
+                            # perimeter in grid cells -> meters
+                            perimeter_cells = measure.perimeter(cloud_slice, neighborhood=8)
+                            perimeter = perimeter_cells * config['horizontal_resolution']
+                            circum_per_level[z_level_idx] = perimeter
+                            # Area [m2]
                             area = np.sum(cloud_slice) * horizontal_resolution_squared
-                            circle_circumference = 2 * np.pi * np.sqrt(area / np.pi)
-                            eff_radius_per_level[z_level_idx] = circum_per_level[z_level_idx] / circle_circumference
+                            area_per_level[z_level_idx] = area
+                            if area > 0:
+                                r_eq = np.sqrt(area / np.pi)
+                                equiv_radius_per_level[z_level_idx] = r_eq
+                                # compactness >=1
+                                comp = perimeter / (2.0 * np.pi * r_eq)
+                                compactness_per_level[z_level_idx] = comp
+                                eff_radius_per_level[z_level_idx] = comp  # legacy slot
                     
                     # Calculate total mass flux
                     mass_flux = np.nansum(mass_flux_per_level)
+                    
+                    # Diagnosed base radius
+                    base_radius_diagnosed = np.nan
+                    base_area_diagnosed = np.nan
+                    # Lowest occupied vertical index
+                    min_z_idx = int(np.min(point_indices[:, 0]))
+                    r0 = equiv_radius_per_level[min_z_idx]
+                    if not np.isnan(r0):
+                        threshold = config.get('base_increase_threshold', 1.5)
+                        scan_levels = config.get('base_scan_levels', 3)
+                        chosen_r = r0
+                        scan_limit = min_z_idx + 1 + scan_levels
+                        for zscan in range(min_z_idx + 1, scan_limit):
+                            rscan = equiv_radius_per_level[zscan]
+                            if not np.isnan(rscan) and rscan >= threshold * r0:
+                                chosen_r = rscan
+                                break
+                        base_radius_diagnosed = chosen_r
+                        base_area_diagnosed = np.pi * chosen_r * chosen_r
+                    # Max equivalent radius
+                    valid_r = equiv_radius_per_level[~np.isnan(equiv_radius_per_level)]
+                    max_equiv_radius = np.nan if valid_r.size == 0 else np.max(valid_r)
                     
                     # Create points array
                     points = np.column_stack([
@@ -392,8 +425,6 @@ class CloudField:
                         cloud_id=cloud_id,
                         size=region.area,
                         surface_area=surface_area,
-                        # location=(xt[int(region.centroid[2])], yt[int(region.centroid[1])], zt[int(region.centroid[0])]),
-                        # changed: use physical centroid, not floored index centroid
                         location=(phys_centroid[0], phys_centroid[1], phys_centroid[2]),
                         points=points,
                         surface_points=surface_points,
@@ -413,7 +444,13 @@ class CloudField:
                         circum_per_level=circum_per_level,
                         eff_radius_per_level=eff_radius_per_level,
                         timestep=self.timestep,
-                        cloud_base_height=min_height
+                        cloud_base_height=min_height,
+                        area_per_level=area_per_level,
+                        equiv_radius_per_level=equiv_radius_per_level,
+                        compactness_per_level=compactness_per_level,
+                        base_radius_diagnosed=base_radius_diagnosed,
+                        base_area_diagnosed=base_area_diagnosed,
+                        max_equiv_radius=max_equiv_radius
                     )
             
             # Force garbage collection after each batch

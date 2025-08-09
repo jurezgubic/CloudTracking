@@ -56,6 +56,10 @@ config = {
 
     # Visualisation (somewhat deprecated)
     'plot_switch': False,        # If True, plot the cloud field at each timestep.
+
+    # Parameters for cloud base diagnosis
+    'base_scan_levels': 3,            # Number of levels to scan upward for diagnosed base from lowest cloud level
+    'base_increase_threshold': 1.5,   # Factor required to increase base radius from lowest cloud level (1.5 = 50%)
 }
 # --- End of user modifiable parameters ---
 
