@@ -34,7 +34,7 @@ total_timesteps = 30  # Number of timesteps to process
 config = {
     # Cloud identification
     'min_size': 10,              # Minimum number of points for a cloud to be considered a cloud
-    'l_condition': 0.001,      # kg/kg. Minimum liquid water content for a point to be a cloud.
+    'l_condition': 0.000001,      # kg/kg. Minimum liquid water content for a point to be a cloud.
     'w_condition': 0.0,          # m/s. Minimum vertical velocity for a point to be part of a cloud.
     'w_switch': False,           # If True, apply the 'w_condition' threshold.
     
