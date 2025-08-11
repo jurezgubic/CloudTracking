@@ -51,3 +51,80 @@ Use the following command to visualise cloud lifecycles, active clouds per times
 ```bash
 python analyse_clouds.py cloud_results.nc
 ```
+
+## Visualisation & Analysis Toolkit
+
+All tools consume the NetCDF produced by `main.py` (default: `cloud_results.nc`).  
+By default, analysis scripts exclude partial (tainted) tracks (those with `valid_track=0`).
+
+### 1. Quick Batch Analysis (stats + lifecycle plot)
+Wrapper that applies consistent filters (complete lifecycles, min timesteps, min size):
+```bash
+python analyse_clouds.py cloud_results.nc \
+  --output-dir ./analysis_output \
+  --min-timesteps 3 \
+  --min-size 10
+```
+Outputs:
+- `track_statistics.png`
+- `cloud_lifecycles.png`
+
+### 2. Track Statistics (programmatic)
+```bash
+python -c "from analysis.track_statistics import compute_statistics, visualise_statistics; \
+s=compute_statistics('cloud_results.nc', min_timesteps=3, min_size=10); \
+visualise_statistics(s, 'analysis_output/track_statistics.png')"
+```
+Reports (for filtered complete tracks): counts, merge events, active clouds per timestep, lifetime distribution, size evolution.
+
+### 3. Lifecycle Timeline Plot
+```bash
+python -c "from analysis.cloud_lifecycle_visualisation import visualise_cloud_lifecycles; \
+visualise_cloud_lifecycles('cloud_results.nc','analysis_output/cloud_lifecycles.png', \
+max_tracks=40, min_valid_timesteps=3, min_size_threshold=10, include_partial=False)"
+```
+`include_partial=False` is the recommended default.
+
+### 4. 3D Track Explorer
+Interactive centroid trajectories; marker size ∝ sqrt(cloud size):
+```bash
+python analysis/cloud_3d_visualizer.py
+```
+Requires an interactive Matplotlib backend (e.g. TkAgg). Large numbers of tracks may slow rendering.
+
+### 5. High-Base Cloud Surface Visualisation (Experimental)
+File: `analysis/non_LCL_cloud_visual.py`  
+Status: INCOMPLETE. To become usable, the following must be implemented:
+- Populate NetCDF reads inside `find_high_initiated_clouds()`.
+- Build list of candidate clouds (filter by first valid height ≥ `height_threshold` & lifetime ≥ `min_timesteps`).
+- Complete early returns where placeholders exist in `extract_cloud_surface` (np, os, plt, skimage imports missing).
+Mark remains experimental until these are done:
+```bash
+# (After completion)
+python analysis/non_LCL_cloud_visual.py
+```
+
+### 6. Debug / Matching Helpers
+`utils/plotting_utils.py` provides:
+- `visualize_points` / `visualize_points_plotly`: compare prior, drifted, and current surface point clouds (used during matching).
+- `plot_labeled_regions`: save 2‑D labeled slices (enable by setting `config['plot_switch']=True` in `main.py`).
+
+
+### 7. Partial (Tainted) Tracks
+Definition (intended design):
+- Track starting at first processed timestep or still active at final timestep have a potentially incomplete lifecycle.
+- Any track inheriting from a partial (via merge) may also be marked tainted.
+Default: exclude these from all analysis plots/statistics. To include: set `include_partial=True` in lifecycle call (not exposed in `analyse_clouds.py` yet—could be added).
+
+### 8. Performance Notes
+- Global KD-tree of surface points built in `CloudField.build_global_surface_kdtree()` accelerates overlap queries.
+- Centroid pre-filtering (`pre_filter_cloud_matches`) reduces expensive surface overlap checks; can disable with config flag `use_pre_filtering=False`.
+- For large domains consider future migration to xarray + dask (not yet implemented).
+
+### 9. Troubleshooting
+| Issue | Cause | Action |
+|-------|-------|--------|
+| No tracks in plots | All filtered out (too strict thresholds or all tainted) | Lower `--min-timesteps` / `--min-size`; inspect `valid_track` values |
+| Stats mostly empty | Placeholder code in statistics script not finished | Complete loops in `analysis/track_statistics.py` |
+| 3D viewer slow | Too many active tracks | Subset timesteps or add filtering logic |
+
