@@ -194,12 +194,19 @@ class CloudTracker:
                 else:
                     matched_clouds_count += 1
 
-        print(f"Cloud tracking summary:")
+        active_tracks_count = sum(1 for track in self.cloud_tracks.values() if track[-1].is_active and track[-1].timestep == current_cloud_field.timestep)
+        cumulative_inactive = sum(1 for track in self.cloud_tracks.values() if not track[-1].is_active)
+        ended_this_step = sum(1 for track in self.cloud_tracks.values()
+                              if (not track[-1].is_active) and track[-1].timestep == current_cloud_field.timestep)
+
+        print("Cloud tracking summary:")
+        print(f"  Active tracks this timestep: {active_tracks_count}")
         print(f"  New clouds: {new_clouds_count}")
-        print(f"  Matched clouds: {matched_clouds_count}")
-        print(f"  Merged clouds: {merges_count}")
-        print(f"  Split clouds: {splits_count}")
-        print(f"  Inactive clouds: {inactive_clouds_count}")
+        print(f"  Continued (matched) clouds: {matched_clouds_count}")
+        print(f"  Merges this timestep: {merges_count}")
+        print(f"  Splits this timestep: {splits_count}")
+        print(f"  Tracks ending this timestep: {ended_this_step}")
+        print(f"  Cumulative inactive (terminated or merged) tracks: {cumulative_inactive}")
 
     # This function is deprecated by the more complex logic in update_tracks
     # but is kept here for reference or simpler tracking scenarios.
