@@ -9,12 +9,12 @@ import os
 import sys
 
 # Configuration parameters
-height_threshold = 750  # Minimum height for cloud initiation (m)
+height_threshold = 1000  # Minimum height for cloud initiation (m)
 min_lifetime_minutes = 5  # Minimum cloud lifetime (minutes)
 timestep_duration_seconds = 60  # Duration between timesteps (seconds)
 min_timesteps = int(min_lifetime_minutes * 60 / timestep_duration_seconds)
 output_folder = 'cloud_surface_visualizations'  # Folder to store visualizations
-l_condition = 0.00001  # Liquid water content threshold (kg/kg)
+l_condition = 0.000001  # Liquid water content threshold (kg/kg)
 
 # Path to original LES data
 base_file_path = '/Users/jure/PhD/coding/RICO_1hr/'
