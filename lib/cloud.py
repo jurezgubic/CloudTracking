@@ -24,6 +24,12 @@ class Cloud:
                  w_per_level,
                  circum_per_level,
                  eff_radius_per_level,  # legacy: stored compactness ratio
+                 # Per-level kinematics (for NIP)
+                 u_per_level=None,
+                 v_per_level=None,
+                 # NIP diagnostics
+                 nip_per_level=None,
+                 nip_acc_per_level=None,
                  is_active=True,
                  age=0,
                  area_per_level=None,
@@ -56,6 +62,12 @@ class Cloud:
         self.w_per_level = w_per_level
         self.circum_per_level = circum_per_level
         self.eff_radius_per_level = eff_radius_per_level  # legacy (compactness ratio)
+        # Per-level kinematics needed by NIP
+        self.u_per_level = u_per_level
+        self.v_per_level = v_per_level
+        # NIP instantaneous and accumulated
+        self.nip_per_level = nip_per_level
+        self.nip_acc_per_level = nip_acc_per_level
         self.is_active = is_active
         self.age = age
         self.merged_into = None  # Track ID this cloud merged into, if any
@@ -80,4 +92,3 @@ class Cloud:
 
     def __repr__(self):
         return f"Cloud(ID: {self.cloud_id}, Size: {self.size}, Surface Area: {self.surface_area}, Max Height: {self.max_height}, Max w: {self.max_w}, Max w cloudbase: {self.max_w_cloud_base}, mass flux: {self.mass_flux}, Active: {self.is_active}, Timestep: {self.timestep})"
-

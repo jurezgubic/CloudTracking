@@ -34,6 +34,9 @@ def initialize_netcdf(file_path, zt):
         root_grp.createVariable('w_per_level', 'f4', ('track', 'time', 'level'), fill_value=np.nan)
         root_grp.createVariable('circum_per_level', 'f4', ('track', 'time', 'level'), fill_value=np.nan)
         root_grp.createVariable('eff_radius_per_level', 'f4', ('track', 'time', 'level'), fill_value=np.nan)
+        # NIP diagnostics
+        root_grp.createVariable('nip_per_level', 'f4', ('track', 'time', 'level'), fill_value=np.nan)
+        root_grp.createVariable('nip_acc_per_level', 'f4', ('track', 'time', 'level'), fill_value=np.nan)
         root_grp.createVariable('location_x', 'f4', ('track', 'time'), fill_value=np.nan)
         root_grp.createVariable('location_y', 'f4', ('track', 'time'), fill_value=np.nan)
         root_grp.createVariable('location_z', 'f4', ('track', 'time'), fill_value=np.nan)
@@ -153,6 +156,9 @@ def write_cloud_tracks_to_netcdf(tracks, track_id_to_index, tainted_tracks, env_
                 w_per_level_var[i, timestep, :] = cloud.w_per_level
                 circum_per_level_var[i, timestep, :] = cloud.circum_per_level
                 eff_radius_per_level_var[i, timestep, :] = cloud.eff_radius_per_level
+                # NIP diagnostics (if computed)
+                root_grp.variables['nip_per_level'][i, timestep, :] = cloud.nip_per_level
+                root_grp.variables['nip_acc_per_level'][i, timestep, :] = cloud.nip_acc_per_level
                 cloud_base_area_var[i, timestep] = cloud.cloud_base_area
                 surface_area_var[i, timestep] = cloud.surface_area
                 loc_x_var[i, timestep], loc_y_var[i, timestep], loc_z_var[i, timestep] = cloud.location
@@ -211,6 +217,8 @@ def write_cloud_tracks_to_netcdf(tracks, track_id_to_index, tainted_tracks, env_
                 w_per_level_var[i, timestep:, :] = np.nan
                 circum_per_level_var[i, timestep:, :] = np.nan
                 eff_radius_per_level_var[i, timestep:, :] = np.nan
+                root_grp.variables['nip_per_level'][i, timestep:, :] = np.nan
+                root_grp.variables['nip_acc_per_level'][i, timestep:, :] = np.nan
                 cloud_base_area_var[i, timestep:] = np.nan
                 surface_area_var[i, timestep:] = np.nan
                 loc_x_var[i, timestep:] = np.nan
@@ -226,4 +234,3 @@ def write_cloud_tracks_to_netcdf(tracks, track_id_to_index, tainted_tracks, env_
                 base_radius_diagnosed_var[i, timestep:] = np.nan
                 base_area_diagnosed_var[i, timestep:] = np.nan
                 max_equiv_radius_var[i, timestep:] = np.nan
-

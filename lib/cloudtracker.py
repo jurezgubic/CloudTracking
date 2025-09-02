@@ -199,6 +199,12 @@ class CloudTracker:
         ended_this_step = sum(1 for track in self.cloud_tracks.values()
                               if (not track[-1].is_active) and track[-1].timestep == current_cloud_field.timestep)
 
+        # After tracks are updated for this timestep, compute accumulated NIP
+        try:
+            self._update_nip_accumulated(current_cloud_field)
+        except Exception as e:
+            print(f"Warning: NIP accumulation failed: {e}")
+
         print("Cloud tracking summary:")
         print(f"  Active tracks this timestep: {active_tracks_count}")
         print(f"  New clouds: {new_clouds_count}")
@@ -207,6 +213,49 @@ class CloudTracker:
         print(f"  Splits this timestep: {splits_count}")
         print(f"  Tracks ending this timestep: {ended_this_step}")
         print(f"  Cumulative inactive (terminated or merged) tracks: {cumulative_inactive}")
+
+    def _update_nip_accumulated(self, current_cloud_field):
+        """
+        Update accumulated NIP for each active track at the current timestep.
+        Uses exponential memory with time scale T(z,t) from current field.
+        """
+        T = getattr(current_cloud_field, 'nip_T_per_level', None)
+        if T is None:
+            return
+        dt = float(self.config.get('timestep_duration', 60.0))
+        decay = np.exp(-dt / np.maximum(T, 1e-9))  # safe even if T tiny
+
+        for track_id, track in self.cloud_tracks.items():
+            if not track:
+                continue
+            last = track[-1]
+            # Only process clouds from the current timestep
+            if last.timestep != current_cloud_field.timestep:
+                continue
+            nip_inst = getattr(last, 'nip_per_level', None)
+            if nip_inst is None:
+                continue
+            # If previous state exists (track length > 1), carry it forward
+            if len(track) >= 2:
+                prev = track[-2]
+                prev_acc = getattr(prev, 'nip_acc_per_level', None)
+            else:
+                prev_acc = None
+
+            if prev_acc is None:
+                last.nip_acc_per_level = np.array(nip_inst, copy=True)
+            else:
+                nlev = len(nip_inst)
+                # Align shapes
+                prev_acc = np.asarray(prev_acc)
+                if prev_acc.shape[0] != nlev:
+                    # Fallback: broadcast with NaNs
+                    pa = np.full(nlev, np.nan)
+                    m = min(nlev, prev_acc.shape[0])
+                    pa[:m] = prev_acc[:m]
+                    prev_acc = pa
+                # Apply per-level exponential memory
+                last.nip_acc_per_level = decay * np.nan_to_num(prev_acc, nan=0.0) + np.nan_to_num(nip_inst, nan=0.0)
 
     # This function is deprecated by the more complex logic in update_tracks
     # but is kept here for reference or simpler tracking scenarios.
@@ -436,4 +485,3 @@ class CloudTracker:
 
     def get_tracks(self):
         return self.cloud_tracks
-

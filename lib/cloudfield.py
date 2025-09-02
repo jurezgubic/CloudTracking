@@ -59,6 +59,13 @@ class CloudField:
         # After clouds are created
         self.build_global_surface_kdtree()
 
+        # Compute Neighbour Interaction Potential (NIP) for all clouds in this field
+        self._compute_nip(config)
+
+    # ---------------------------
+    # Instantaneous environment mass flux
+    # ---------------------------
+
     def _calculate_environment_mass_flux(self, labeled_array, p_data, theta_l_data, l_data, q_t_data, w_data, config):
         """Calculate mass flux for the environment (non-cloud regions) at each level."""
         print("Calculating environment mass flux...")
@@ -343,6 +350,8 @@ class CloudField:
                     mass_flux_per_level = np.full(n_levels, np.nan)
                     temp_per_level = np.full(n_levels, np.nan)
                     w_per_level = np.full(n_levels, np.nan)
+                    u_per_level = np.full(n_levels, np.nan)
+                    v_per_level = np.full(n_levels, np.nan)
                     circum_per_level = np.full(n_levels, np.nan)
                     eff_radius_per_level = np.full(n_levels, np.nan)  # legacy compactness ratio
                     area_per_level = np.full(n_levels, np.nan)
@@ -361,9 +370,13 @@ class CloudField:
                         level_w_values = w_values[level_mask]
                         level_temps = temps[level_mask]
                         level_mass_fluxes = mass_fluxes[level_mask]
+                        level_u_values = u_values[level_mask]
+                        level_v_values = v_values[level_mask]
                         
                         # Calculate level statistics
                         w_per_level[z_level_idx] = np.mean(level_w_values)
+                        u_per_level[z_level_idx] = np.mean(level_u_values)
+                        v_per_level[z_level_idx] = np.mean(level_v_values)
                         temp_per_level[z_level_idx] = np.mean(level_temps)
                         mass_flux_per_level[z_level_idx] = np.sum(level_mass_fluxes)
                         
@@ -450,7 +463,10 @@ class CloudField:
                         compactness_per_level=compactness_per_level,
                         base_radius_diagnosed=base_radius_diagnosed,
                         base_area_diagnosed=base_area_diagnosed,
-                        max_equiv_radius=max_equiv_radius
+                        max_equiv_radius=max_equiv_radius,
+                        # NIP kinematics per level
+                        u_per_level=u_per_level,
+                        v_per_level=v_per_level
                     )
             
             # Force garbage collection after each batch
@@ -491,3 +507,196 @@ class CloudField:
         if len(self.surface_points_array) > 0:
             self.surface_points_kdtree = cKDTree(self.surface_points_array[:, :2])
             print(f"KD-tree built with {len(self.surface_points_array)} surface points")
+
+
+    # NIP: Neighbour Interaction Potential
+    def _compute_nip(self, config):
+        """
+        Computes instantaneous per-level NIP for every cloud and store field-level scales
+        required for temporal accumulation (T per level, Lh, Vref per level).
+
+        Notes:
+        - Uses periodic minimum-image distance in x,y using domain sizes from xt, yt.
+        - Per-level winds are area-mean over in-cloud points.
+        - Normalizes by median mass flux per level and pi*Lh^2.
+        - Guards against zero/NaN medians and empty neighbours.
+        """
+        if not self.clouds:
+            self.nip_Lh = np.nan
+            self.nip_Vref_per_level = None
+            self.nip_T_per_level = None
+            return
+
+
+        clouds = self.clouds
+        cloud_ids = list(clouds.keys())
+        n_clouds = len(cloud_ids)
+        print(f"Calculating NIP for timestep {self.timestep}: {n_clouds} clouds")
+        zt = self.zt
+        n_levels = len(zt)
+
+        # Domain sizes (periodic)
+        dx = config.get('horizontal_resolution', float(self.xt[1]-self.xt[0]))
+        Lx = (self.xt[-1] - self.xt[0]) + dx
+        Ly = (self.yt[-1] - self.yt[0]) + dx
+
+        # Parameters
+        gamma = float(config.get('nip_gamma', 0.3))
+        f_radius = float(config.get('nip_f', 3.0))
+        Lh_min = float(config.get('nip_Lh_min', 100.0))
+        Lh_max = float(config.get('nip_Lh_max', 2000.0))
+        T_min = float(config.get('nip_T_min', 60.0))
+        T_max = float(config.get('nip_T_max', 1800.0))
+        Vref_floor = float(config.get('nip_Vref_floor', 1.0))
+
+        # Gather centroids for distance calculations
+        centroids_xy = np.array([[clouds[cid].location[0], clouds[cid].location[1]] for cid in cloud_ids], dtype=float)
+
+        # Pairwise periodic distances (minimum-image convention)
+        def min_image_delta(a, b, L):
+            d = (b - a + 0.5 * L) % L - 0.5 * L
+            return d
+
+        # Compute nearest-neighbour distances for Lh
+        nn_dists = np.empty(n_clouds, dtype=float)
+        for i in range(n_clouds):
+            xi, yi = centroids_xy[i]
+            best = np.inf
+            for j in range(n_clouds):
+                if i == j:
+                    continue
+                xj, yj = centroids_xy[j]
+                dxij = min_image_delta(xi, xj, Lx)
+                dyij = min_image_delta(yi, yj, Ly)
+                dij = np.hypot(dxij, dyij)
+                if dij < best:
+                    best = dij
+            nn_dists[i] = best if np.isfinite(best) else np.nan
+
+        # Lh = 2 * median(NND), clipped
+        valid_nnd = nn_dists[np.isfinite(nn_dists) & (nn_dists > 0)]
+        if valid_nnd.size == 0:
+            Lh = Lh_min
+        else:
+            Lh = 2.0 * float(np.median(valid_nnd))
+            Lh = float(np.clip(Lh, Lh_min, Lh_max))
+
+        # Global safety search radius
+        R_global = min(3.0 * Lh, 0.5 * min(Lx, Ly))
+
+        # Compute per-level median mass flux across clouds and per-level Vref
+        # Also ensure per-cloud per-level u/v arrays exist; if not, approximate using cloud mean
+        mass_flux_stack = np.full((n_clouds, n_levels), np.nan, dtype=float)
+        u_stack = np.full((n_clouds, n_levels), np.nan, dtype=float)
+        v_stack = np.full((n_clouds, n_levels), np.nan, dtype=float)
+        r_eq_stack = np.full((n_clouds, n_levels), np.nan, dtype=float)
+        for idx, cid in enumerate(cloud_ids):
+            c = clouds[cid]
+            mass_flux_stack[idx, :] = c.mass_flux_per_level
+            # Kinematics per level; if missing, fill with overall mean
+            if getattr(c, 'u_per_level', None) is None or getattr(c, 'v_per_level', None) is None:
+                u_stack[idx, :] = np.full(n_levels, c.mean_u)
+                v_stack[idx, :] = np.full(n_levels, c.mean_v)
+            else:
+                u_stack[idx, :] = c.u_per_level
+                v_stack[idx, :] = c.v_per_level
+            r_eq_stack[idx, :] = c.equiv_radius_per_level
+
+        # Median mass flux per level across clouds; use positive values when possible
+        med_mass_flux = np.full(n_levels, np.nan, dtype=float)
+        for z in range(n_levels):
+            mfz = mass_flux_stack[:, z]
+            # prefer positive-only median; fallback to all finite
+            pos = mfz[np.isfinite(mfz) & (mfz > 0)]
+            if pos.size > 0:
+                med_mass_flux[z] = float(np.median(pos))
+            else:
+                fin = mfz[np.isfinite(mfz)]
+                med_mass_flux[z] = float(np.median(fin)) if fin.size > 0 else np.nan
+
+        # Vref per level: median of speeds across clouds
+        Vref = np.full(n_levels, np.nan, dtype=float)
+        for z in range(n_levels):
+            speeds = np.hypot(u_stack[:, z], v_stack[:, z])
+            speeds = speeds[np.isfinite(speeds)]
+            Vref[z] = float(np.median(speeds)) if speeds.size > 0 else 0.0
+
+        # Time scale per level
+        # Ensure denominator >= configured floor
+        T = np.full(n_levels, np.nan, dtype=float)
+        for z in range(n_levels):
+            denom = max(Vref[z], Vref_floor)
+            T[z] = float(np.clip(Lh / denom, T_min, T_max))
+
+        # One-line summary
+        Vref_med = float(np.nanmedian(Vref)) if np.any(np.isfinite(Vref)) else float('nan')
+        T_med = float(np.nanmedian(T)) if np.any(np.isfinite(T)) else float('nan')
+        print(f"NIP scales: Lh={Lh:.1f} m, Vref_med={Vref_med:.2f} m/s, T_med={T_med:.1f} s")
+
+        # Compute NIP per level for each cloud
+        Dmax = ( (0.5*Lx)**2 + (0.5*Ly)**2 )**0.5
+        N_norm = np.pi * (Lh**2)  # part not including mass-flux median
+
+        for i, cid in enumerate(cloud_ids):
+            ci = clouds[cid]
+            xi, yi = centroids_xy[i]
+            nip_i = np.zeros(n_levels, dtype=float)
+
+            # For each neighbour j
+            for j, cjd in enumerate(cloud_ids):
+                if j == i:
+                    continue
+                xj, yj = centroids_xy[j]
+                dxij = min_image_delta(xi, xj, Lx)
+                dyij = min_image_delta(yi, yj, Ly)
+                dij = float(np.hypot(dxij, dyij))
+                if dij <= 0.0:
+                    continue
+                # unit vector from i->j
+                rx = dxij / dij
+                ry = dyij / dij
+
+                cj = clouds[cjd]
+                # For each level, check search radius and accumulate
+                for z in range(n_levels):
+                    r_eq_i = r_eq_stack[i, z]
+                    if not np.isfinite(r_eq_i) or r_eq_i <= 0:
+                        continue
+                    # Dynamic search radius clipped by global safety
+                    Ri = min(f_radius * r_eq_i, R_global, Dmax)
+                    if dij > Ri:
+                        continue
+
+                    mf_med = med_mass_flux[z]
+                    if not np.isfinite(mf_med) or mf_med <= 0:
+                        # no meaningful normalizer/mark for this level
+                        continue
+                    Mj = mass_flux_stack[j, z]
+                    if not np.isfinite(Mj) or Mj <= 0:
+                        continue
+                    mark = Mj / mf_med
+
+                    # Kinematic boost
+                    ui = u_stack[i, z]; vi = v_stack[i, z]
+                    uj = u_stack[j, z]; vj = v_stack[j, z]
+                    if not (np.isfinite(ui) and np.isfinite(vi) and np.isfinite(uj) and np.isfinite(vj)):
+                        kin_boost = 1.0
+                    else:
+                        vin = -((uj - ui) * rx + (vj - vi) * ry)  # positive when j approaches i
+                        vref = max(Vref[z], Vref_floor)
+                        kin_boost = 1.0 + gamma * max(0.0, float(vin)) / vref
+
+                    kernel = np.exp(-dij / Lh)
+                    nip_i[z] += mark * kernel * kin_boost
+
+            # Final normalization: divide by π Lh^2 only (marks already normalized by mf_med)
+            for z in range(n_levels):
+                ci_nip = nip_i[z] / N_norm if N_norm > 0 else 0.0
+                if ci.nip_per_level is None:
+                    ci.nip_per_level = np.full(n_levels, np.nan, dtype=float)
+                ci.nip_per_level[z] = ci_nip
+
+        # Store field-level scales for accumulation use
+        self.nip_Lh = Lh
+        self.nip_Vref_per_level = Vref
+        self.nip_T_per_level = T

@@ -28,13 +28,13 @@ file_name = {
 }
 
 # Processing Options
-total_timesteps = 30  # Number of timesteps to process
+total_timesteps = 5  # Number of timesteps to process
 
 # Cloud Definition and Tracking Configuration
 config = {
     # Cloud identification
     'min_size': 10,              # Minimum number of points for a cloud to be considered a cloud
-    'l_condition': 0.000001,      # kg/kg. Minimum liquid water content for a point to be a cloud.
+    'l_condition': 0.001,      # kg/kg. Minimum liquid water content for a point to be a cloud.
     'w_condition': 0.0,          # m/s. Minimum vertical velocity for a point to be part of a cloud.
     'w_switch': False,           # If True, apply the 'w_condition' threshold.
     
@@ -60,6 +60,14 @@ config = {
     # Parameters for cloud base diagnosis
     'base_scan_levels': 3,            # Number of levels to scan upward for diagnosed base from lowest cloud level
     'base_increase_threshold': 1.5,   # Factor required to increase base radius from lowest cloud level (1.5 = 50%)
+
+    # NIP (Neighbour Interaction Potential) parameters
+    'nip_gamma': 0.3,           # Kinematic boost coefficient
+    'nip_f': 3.0,               # Radius multiplier for neighbour search per level
+    'nip_Lh_min': 100.0,        # Min horizontal scale Lh [m]
+    'nip_Lh_max': 2000.0,       # Max horizontal scale Lh [m]
+    'nip_T_min': 60.0,          # Min temporal memory scale [s]
+    'nip_T_max': 1800.0,        # Max temporal memory scale [s]
 }
 # --- End of user modifiable parameters ---
 
@@ -292,5 +300,4 @@ if __name__ == "__main__":
 #     os.makedirs(output_folder)
 # output_netcdf_path = f'{output_folder}/{total_timesteps}timesteps_{config["l_condition"]}l_condition.nc'
 # print(f"Output netcdf file path: {output_netcdf_path}")
-
 
