@@ -18,13 +18,13 @@ output_netcdf_path = 'cloud_results.nc'
 
 # paths to the LES data files
 file_name = {
-    'l': 'rico.l.nc',  # Liquid water
+    'l': 'rico.l.nc',  # Liquid water mixing ratio
     'u': 'rico.u.nc',  # u wind
     'v': 'rico.v.nc',  # v wind
     'w': 'rico.w.nc',  # w wind (vertical velocity)
     'p': 'rico.p.nc',  # Pressure
-    't': 'rico.t.nc',  # Temperature
-    'q': 'rico.q.nc',  # Total water
+    't': 'rico.t.nc',  # Liquid Water Potential temperature
+    'q': 'rico.q.nc',  # Total water mixing ratio
 }
 
 # Processing Options
