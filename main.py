@@ -28,7 +28,7 @@ file_name = {
 }
 
 # Processing Options
-total_timesteps = 7  # Number of timesteps to process
+total_timesteps = 10 # Number of timesteps to process
 
 # Cloud Definition and Tracking Configuration
 config = {
@@ -68,6 +68,10 @@ config = {
     'nip_Lh_max': 5000.0,       # Max horizontal scale Lh [m]
     'nip_T_min': 60.0,          # Min temporal memory scale [s]
     'nip_T_max': 1800.0,        # Max temporal memory scale [s]
+
+    # Environment ring (per-cloud surroundings) parameters
+    'env_ring_max_distance': 3,   # Max Manhattan ring distance D around cloud edge (2D)
+    'env_periodic_rings': True,   # Respect periodic boundaries when forming rings
 }
 # --- End of user modifiable parameters ---
 
@@ -188,7 +192,8 @@ def process_clouds(cloud_tracker):
             cloud_field.env_mass_flux_per_level, 
             output_netcdf_path, 
             timestep, 
-            cloud_field.zt
+            cloud_field.zt,
+            config.get('env_ring_max_distance', 3)
         )
 
         gc.collect()
@@ -220,7 +225,8 @@ def process_clouds(cloud_tracker):
         cloud_field.env_mass_flux_per_level, 
         output_netcdf_path, 
         total_timesteps - 1, 
-        cloud_field.zt
+        cloud_field.zt,
+        config.get('env_ring_max_distance', 3)
     )
 
 
@@ -300,4 +306,3 @@ if __name__ == "__main__":
 #     os.makedirs(output_folder)
 # output_netcdf_path = f'{output_folder}/{total_timesteps}timesteps_{config["l_condition"]}l_condition.nc'
 # print(f"Output netcdf file path: {output_netcdf_path}")
-

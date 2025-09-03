@@ -67,12 +67,14 @@ class CloudField:
     # ---------------------------
 
     def _calculate_environment_mass_flux(self, labeled_array, p_data, theta_l_data, l_data, q_t_data, w_data, config):
-        """Calculate mass flux for the environment (non-cloud regions) at each level."""
+        """Calculate mass flux and baseline densities for the environment at each level."""
         print("Calculating environment mass flux...")
         env_mask = labeled_array == 0
         n_levels = len(self.zt)
         
         if not np.any(env_mask):
+            # No environment present: set empty fields
+            self.env_rho_mean_per_level = np.full(n_levels, np.nan)
             return np.zeros(n_levels)
 
         # Get coordinates of all environment points
@@ -102,8 +104,8 @@ class CloudField:
         if hasattr(w_values_env, 'filled'):
             w_values_env = w_values_env.filled(np.nan)
 
-        # Reuse the existing physics function to get mass flux for each point
-        _, _, mass_fluxes_env = calculate_physics_variables(
+        # Reuse the existing physics function to get densities and mass flux for each point
+        _, rhos_env, mass_fluxes_env = calculate_physics_variables(
             p_values_env,
             theta_l_values_env,
             q_l_values_env,
@@ -115,6 +117,11 @@ class CloudField:
         # Sum the mass fluxes per level using the z-indices
         # np.bincount is highly efficient for this aggregation task
         env_mass_flux_per_level = np.bincount(z_indices, weights=mass_fluxes_env, minlength=n_levels)
+        # Compute mean density per level for environment (used for buoyancy reference)
+        counts = np.bincount(z_indices, minlength=n_levels).astype(float)
+        sum_rho = np.bincount(z_indices, weights=rhos_env, minlength=n_levels)
+        with np.errstate(invalid='ignore', divide='ignore'):
+            self.env_rho_mean_per_level = sum_rho / counts
         
         return env_mass_flux_per_level
 
@@ -239,8 +246,11 @@ class CloudField:
         # Calculate horizontal_resolution_squared once
         horizontal_resolution_squared = config['horizontal_resolution']**2
         
-        # Define a 3D connectivity structure for erosion, used to find surface points
+        # Define connectivity structures
         erosion_structure = generate_binary_structure(3, 3)
+        ring_structure_2d = generate_binary_structure(2, 1)  # Manhattan (4-neighbour)
+        D_ring = int(config.get('env_ring_max_distance', 3))
+        periodic_rings = bool(config.get('env_periodic_rings', True))
 
         # Create Cloud objects in batches to manage memory
         clouds = {}
@@ -468,6 +478,108 @@ class CloudField:
                         u_per_level=u_per_level,
                         v_per_level=v_per_level
                     )
+
+                    # --- Environment ring averages (per level, per ring distance) ---
+                    # Initialize arrays with NaN
+                    n_rings = D_ring
+                    env_w_r = np.full((n_levels, n_rings), np.nan, dtype=float)
+                    env_l_r = np.full((n_levels, n_rings), np.nan, dtype=float)
+                    env_qt_r = np.full((n_levels, n_rings), np.nan, dtype=float)
+                    env_qv_r = np.full((n_levels, n_rings), np.nan, dtype=float)
+                    env_p_r = np.full((n_levels, n_rings), np.nan, dtype=float)
+                    env_theta_r = np.full((n_levels, n_rings), np.nan, dtype=float)
+                    env_buoy_r = np.full((n_levels, n_rings), np.nan, dtype=float)
+
+                    # Precompute: baseline environment mean density per level
+                    rho_env_mean = getattr(self, 'env_rho_mean_per_level', None)
+
+                    # For each occupied level, compute rings
+                    for z_level_idx in unique_z_levels:
+                        cloud_slice = updated_labeled_array[z_level_idx, :, :] == region.label
+                        if not np.any(cloud_slice):
+                            continue
+                        env_slice = (updated_labeled_array[z_level_idx, :, :] == 0)
+
+                        # Prepare periodic padding (or constant)
+                        padw = ((D_ring, D_ring), (D_ring, D_ring))
+                        if periodic_rings:
+                            cloud_pad = np.pad(cloud_slice, padw, mode='wrap')
+                            env_pad = np.pad(env_slice, padw, mode='wrap')
+                        else:
+                            cloud_pad = np.pad(cloud_slice, padw, mode='constant', constant_values=False)
+                            env_pad = np.pad(env_slice, padw, mode='constant', constant_values=False)
+
+                        # Compute successive dilations on padded grid
+                        # Iter 0 is the cloud itself (for convenience)
+                        prev = cloud_pad
+                        for d in range(1, D_ring + 1):
+                            dil = binary_dilation(cloud_pad, structure=ring_structure_2d, iterations=d)
+                            ring_pad = dil & (~prev)
+                            # Crop back to original slice
+                            ring_center = ring_pad[D_ring:-D_ring, D_ring:-D_ring]
+                            # Keep only environment points
+                            ring_env = ring_center & env_slice
+                            if np.any(ring_env):
+                                # Extract ring values
+                                w_z = w_data[z_level_idx]
+                                l_z = l_data[z_level_idx]
+                                p_z = p_data[z_level_idx]
+                                t_z = theta_l_data[z_level_idx]
+                                qt_z = q_t_data[z_level_idx]
+
+                                # Handle masked arrays
+                                if hasattr(w_z, 'filled'):
+                                    w_z = w_z.filled(np.nan)
+                                if hasattr(l_z, 'filled'):
+                                    l_z = l_z.filled(np.nan)
+                                if hasattr(p_z, 'filled'):
+                                    p_z = p_z.filled(np.nan)
+                                if hasattr(t_z, 'filled'):
+                                    t_z = t_z.filled(np.nan)
+                                if hasattr(qt_z, 'filled'):
+                                    qt_z = qt_z.filled(np.nan)
+
+                                # Compute qv in same units as inputs for output; also kg/kg for physics
+                                qv_z = qt_z - l_z
+
+                                # Means (environment ring)
+                                j = d - 1
+                                env_w_r[z_level_idx, j] = np.nanmean(w_z[ring_env])
+                                env_l_r[z_level_idx, j] = np.nanmean(l_z[ring_env])
+                                env_qt_r[z_level_idx, j] = np.nanmean(qt_z[ring_env])
+                                env_qv_r[z_level_idx, j] = np.nanmean(qv_z[ring_env])
+                                env_p_r[z_level_idx, j] = np.nanmean(p_z[ring_env])
+                                env_theta_r[z_level_idx, j] = np.nanmean(t_z[ring_env])
+
+                                # Buoyancy: compute densities for ring points and reference to env mean rho at this level
+                                # Convert to kg/kg for physics
+                                ql_ring = l_z[ring_env] / 1000.0
+                                qt_ring = qt_z[ring_env] / 1000.0
+                                qv_ring = qt_ring - ql_ring
+                                p_ring = p_z[ring_env]
+                                t_ring = t_z[ring_env]
+                                w_ring = w_z[ring_env]
+                                _, rhos_ring, _ = calculate_physics_variables(
+                                    p_ring, t_ring, ql_ring, qv_ring, w_ring,
+                                    horizontal_resolution_squared
+                                )
+                                rho0 = rho_env_mean[z_level_idx] if rho_env_mean is not None else np.nan
+                                if np.isfinite(rho0) and np.any(np.isfinite(rhos_ring)):
+                                    g = 9.81
+                                    with np.errstate(invalid='ignore', divide='ignore'):
+                                        b_ring = -g * (rhos_ring - rho0) / rho0
+                                    env_buoy_r[z_level_idx, j] = np.nanmean(b_ring)
+
+                            prev = dil
+
+                    # Attach to cloud
+                    clouds[cloud_id].env_w_rings = env_w_r
+                    clouds[cloud_id].env_l_rings = env_l_r
+                    clouds[cloud_id].env_qt_rings = env_qt_r
+                    clouds[cloud_id].env_qv_rings = env_qv_r
+                    clouds[cloud_id].env_p_rings = env_p_r
+                    clouds[cloud_id].env_theta_l_rings = env_theta_r
+                    clouds[cloud_id].env_buoyancy_rings = env_buoy_r
             
             # Force garbage collection after each batch
             gc.collect()

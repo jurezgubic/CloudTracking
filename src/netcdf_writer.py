@@ -2,7 +2,7 @@ from netCDF4 import Dataset
 import numpy as np
 import os
 
-def initialize_netcdf(file_path, zt):
+def initialize_netcdf(file_path, zt, ring_count):
     """Create a new NetCDF file with necessary dimensions and variables for cloud tracking data."""
     # Create the file and define dimensions and variables
     with Dataset(file_path, 'w', format='NETCDF4') as root_grp:
@@ -11,6 +11,7 @@ def initialize_netcdf(file_path, zt):
         #root_grp.createDimension('point', 100000)  # Static dimension for cloud points Warning: Not in use, crude test remnant!
         root_grp.createDimension('coordinate', 3)  # Static dimension for 3D coordinates
         root_grp.createDimension('level', len(zt))  # Using consistent height levels
+        root_grp.createDimension('ring', ring_count)  # Environment ring distance index (1..D)
 
         # Flag for whether a track is fully valid or not (0=partial, 1=complete)
         valid_track_var = root_grp.createVariable('valid_track', 'i4', ('track',))
@@ -64,13 +65,22 @@ def initialize_netcdf(file_path, zt):
         root_grp.createVariable('base_area_diagnosed', 'f4', ('track','time'), fill_value=np.nan)
         root_grp.createVariable('max_equiv_radius', 'f4', ('track','time'), fill_value=np.nan)
 
+        # Environment ring variables (track, time, level, ring)
+        root_grp.createVariable('env_w_rings', 'f4', ('track','time','level','ring'), fill_value=np.nan)
+        root_grp.createVariable('env_l_rings', 'f4', ('track','time','level','ring'), fill_value=np.nan)
+        root_grp.createVariable('env_qt_rings', 'f4', ('track','time','level','ring'), fill_value=np.nan)
+        root_grp.createVariable('env_qv_rings', 'f4', ('track','time','level','ring'), fill_value=np.nan)
+        root_grp.createVariable('env_p_rings', 'f4', ('track','time','level','ring'), fill_value=np.nan)
+        root_grp.createVariable('env_theta_l_rings', 'f4', ('track','time','level','ring'), fill_value=np.nan)
+        root_grp.createVariable('env_buoyancy_rings', 'f4', ('track','time','level','ring'), fill_value=np.nan)
 
-def write_cloud_tracks_to_netcdf(tracks, track_id_to_index, tainted_tracks, env_mass_flux_per_level, file_path, timestep, zt):
-    """Write cloud tracking data to a NetCDF file for a given timestep using stable indices."""
+
+def write_cloud_tracks_to_netcdf(tracks, track_id_to_index, tainted_tracks, env_mass_flux_per_level, file_path, timestep, zt, ring_count):
+    """Write cloud tracking data (including environment rings) to NetCDF for a timestep."""
 
     # Create the file if it doesn't exist
     if not os.path.exists(file_path):
-        initialize_netcdf(file_path, zt)
+        initialize_netcdf(file_path, zt, ring_count)
 
     # Write data for clouds at this timestep
     with Dataset(file_path, 'a') as root_grp:
@@ -110,6 +120,15 @@ def write_cloud_tracks_to_netcdf(tracks, track_id_to_index, tainted_tracks, env_
         base_radius_diagnosed_var = root_grp.variables['base_radius_diagnosed']
         base_area_diagnosed_var = root_grp.variables['base_area_diagnosed']
         max_equiv_radius_var = root_grp.variables['max_equiv_radius']
+
+        # Environment ring variables
+        env_w_rings_var = root_grp.variables['env_w_rings']
+        env_l_rings_var = root_grp.variables['env_l_rings']
+        env_qt_rings_var = root_grp.variables['env_qt_rings']
+        env_qv_rings_var = root_grp.variables['env_qv_rings']
+        env_p_rings_var = root_grp.variables['env_p_rings']
+        env_theta_l_rings_var = root_grp.variables['env_theta_l_rings']
+        env_buoyancy_rings_var = root_grp.variables['env_buoyancy_rings']
 
         # Write environment data for this timestep
         if env_mass_flux_per_level is not None:
@@ -173,10 +192,20 @@ def write_cloud_tracks_to_netcdf(tracks, track_id_to_index, tainted_tracks, env_
                 base_radius_diagnosed_var[i, timestep] = cloud.base_radius_diagnosed
                 base_area_diagnosed_var[i, timestep] = cloud.base_area_diagnosed
                 max_equiv_radius_var[i, timestep] = cloud.max_equiv_radius
-                
+
                 # Write merge and split tracking data
                 merges_count_var[i, timestep] = cloud.merges_count
                 splits_count_var[i, timestep] = cloud.splits_count
+
+                # Write environment ring arrays if present
+                if getattr(cloud, 'env_w_rings', None) is not None:
+                    env_w_rings_var[i, timestep, :, :] = cloud.env_w_rings
+                    env_l_rings_var[i, timestep, :, :] = cloud.env_l_rings
+                    env_qt_rings_var[i, timestep, :, :] = cloud.env_qt_rings
+                    env_qv_rings_var[i, timestep, :, :] = cloud.env_qv_rings
+                    env_p_rings_var[i, timestep, :, :] = cloud.env_p_rings
+                    env_theta_l_rings_var[i, timestep, :, :] = cloud.env_theta_l_rings
+                    env_buoyancy_rings_var[i, timestep, :, :] = cloud.env_buoyancy_rings
                 
                 # Write split_from information if available
                 if hasattr(cloud, 'split_from') and cloud.split_from is not None:
@@ -234,3 +263,12 @@ def write_cloud_tracks_to_netcdf(tracks, track_id_to_index, tainted_tracks, env_
                 base_radius_diagnosed_var[i, timestep:] = np.nan
                 base_area_diagnosed_var[i, timestep:] = np.nan
                 max_equiv_radius_var[i, timestep:] = np.nan
+
+                # Clear ring arrays for inactive entries
+                env_w_rings_var[i, timestep:, :, :] = np.nan
+                env_l_rings_var[i, timestep:, :, :] = np.nan
+                env_qt_rings_var[i, timestep:, :, :] = np.nan
+                env_qv_rings_var[i, timestep:, :, :] = np.nan
+                env_p_rings_var[i, timestep:, :, :] = np.nan
+                env_theta_l_rings_var[i, timestep:, :, :] = np.nan
+                env_buoyancy_rings_var[i, timestep:, :, :] = np.nan

@@ -85,6 +85,16 @@ class Cloud:
         self.base_area_diagnosed = base_area_diagnosed
         self.max_equiv_radius = max_equiv_radius
 
+        # Environment rings (per level x ring distance)
+        # Averages over environment points at Manhattan distance d=1..D from cloud edge
+        self.env_w_rings = None
+        self.env_l_rings = None
+        self.env_qt_rings = None
+        self.env_qv_rings = None
+        self.env_p_rings = None
+        self.env_theta_l_rings = None
+        self.env_buoyancy_rings = None
+
     def update_max_height(self, new_height):
         """ Update the max height of the cloud """
         if new_height > self.max_height:
