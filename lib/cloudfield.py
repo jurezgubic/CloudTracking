@@ -614,19 +614,21 @@ class CloudField:
                 fin = mfz[np.isfinite(mfz)]
                 med_mass_flux[z] = float(np.median(fin)) if fin.size > 0 else np.nan
 
-        # Vref per level: median of speeds across clouds
+        # Vref per level: median speed across clouds, only where level is occupied
         Vref = np.full(n_levels, np.nan, dtype=float)
         for z in range(n_levels):
             speeds = np.hypot(u_stack[:, z], v_stack[:, z])
             speeds = speeds[np.isfinite(speeds)]
-            Vref[z] = float(np.median(speeds)) if speeds.size > 0 else 0.0
+            # If no clouds occupy this level (no finite speeds), leave Vref[z] = NaN
+            if speeds.size > 0:
+                Vref[z] = float(np.median(speeds))
 
         # Time scale per level
-        # Ensure denominator >= configured floor
         T = np.full(n_levels, np.nan, dtype=float)
         for z in range(n_levels):
-            denom = max(Vref[z], Vref_floor)
-            T[z] = float(np.clip(Lh / denom, T_min, T_max))
+            # Only define T where Vref is finite and positive; else leave NaN
+            if np.isfinite(Vref[z]) and Vref[z] > 0:
+                T[z] = float(np.clip(Lh / Vref[z], T_min, T_max))
 
         # One-line summary
         Vref_med = float(np.nanmedian(Vref)) if np.any(np.isfinite(Vref)) else float('nan')
@@ -683,8 +685,10 @@ class CloudField:
                         kin_boost = 1.0
                     else:
                         vin = -((uj - ui) * rx + (vj - vi) * ry)  # positive when j approaches i
-                        vref = max(Vref[z], Vref_floor)
-                        kin_boost = 1.0 + gamma * max(0.0, float(vin)) / vref
+                        if np.isfinite(Vref[z]) and Vref[z] > 0:
+                            kin_boost = 1.0 + gamma * max(0.0, float(vin)) / float(Vref[z])
+                        else:
+                            kin_boost = 1.0
 
                     kernel = np.exp(-dij / Lh)
                     nip_i[z] += mark * kernel * kin_boost

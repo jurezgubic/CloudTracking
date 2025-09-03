@@ -223,7 +223,11 @@ class CloudTracker:
         if T is None:
             return
         dt = float(self.config.get('timestep_duration', 60.0))
-        decay = np.exp(-dt / np.maximum(T, 1e-9))  # safe even if T tiny
+        # Build per-level decay; where T is not defined (NaN or <=0), set decay=0 (no memory)
+        T_arr = np.asarray(T, dtype=float)
+        decay = np.zeros_like(T_arr)
+        mask = np.isfinite(T_arr) & (T_arr > 0)
+        decay[mask] = np.exp(-dt / T_arr[mask])
 
         for track_id, track in self.cloud_tracks.items():
             if not track:
@@ -254,7 +258,7 @@ class CloudTracker:
                     m = min(nlev, prev_acc.shape[0])
                     pa[:m] = prev_acc[:m]
                     prev_acc = pa
-                # Apply per-level exponential memory
+                # Apply per-level exponential memory; decay=0 means no carryover
                 last.nip_acc_per_level = decay * np.nan_to_num(prev_acc, nan=0.0) + np.nan_to_num(nip_inst, nan=0.0)
 
     # This function is deprecated by the more complex logic in update_tracks
