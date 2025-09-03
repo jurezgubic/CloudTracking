@@ -28,13 +28,13 @@ file_name = {
 }
 
 # Processing Options
-total_timesteps = 10  # Number of timesteps to process
+total_timesteps = 7  # Number of timesteps to process
 
 # Cloud Definition and Tracking Configuration
 config = {
     # Cloud identification
     'min_size': 50,              # Minimum number of points for a cloud to be considered a cloud
-    'l_condition': 0.001,      # kg/kg. Minimum liquid water content for a point to be a cloud.
+    'l_condition': 0.0001,      # kg/kg. Minimum liquid water content for a point to be a cloud.
     'w_condition': 0.0,          # m/s. Minimum vertical velocity for a point to be part of a cloud.
     'w_switch': False,           # If True, apply the 'w_condition' threshold.
     
@@ -63,9 +63,9 @@ config = {
 
     # NIP (Neighbour Interaction Potential) parameters
     'nip_gamma': 0.3,           # Kinematic boost coefficient
-    'nip_f': 3.0,               # Radius multiplier for neighbour search per level
+    'nip_f': 10.0,               # Radius multiplier for neighbour search per level
     'nip_Lh_min': 100.0,        # Min horizontal scale Lh [m]
-    'nip_Lh_max': 2000.0,       # Max horizontal scale Lh [m]
+    'nip_Lh_max': 5000.0,       # Max horizontal scale Lh [m]
     'nip_T_min': 60.0,          # Min temporal memory scale [s]
     'nip_T_max': 1800.0,        # Max temporal memory scale [s]
 }
