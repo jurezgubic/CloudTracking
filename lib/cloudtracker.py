@@ -350,29 +350,39 @@ class CloudTracker:
         
         # --- 5. Check for matches with the current cloud ID ---
         cloud_id = cloud.cloud_id
+        min_overlap = int(self.config.get('min_surface_overlap_points', 1))
+        # Accumulate unique indices of overlapping points to avoid double-counting
+        overlapping_indices = set()
+
         for i, indices in enumerate(nearby_indices_list):
             if not indices:
                 continue
-                
+
             # Get cloud IDs for the nearby points
             nearby_cloud_ids = np.unique(current_cloud_field.surface_point_to_cloud_id[indices])
-            
+
             # If the current cloud's ID is among them, check vertical proximity
             if cloud_id in nearby_cloud_ids:
                 # Get only points belonging to the current cloud
                 current_cloud_mask = current_cloud_field.surface_point_to_cloud_id[indices] == cloud_id
                 current_point_indices = np.array(indices)[current_cloud_mask]
-                
+
                 if len(current_point_indices) == 0:
                     continue
-                    
+
                 # Check vertical proximity
                 last_z = all_query_points[i, 2]
                 current_z_values = current_cloud_field.surface_points_array[current_point_indices, 2]
-                
-                if np.any(np.abs(current_z_values - last_z) <= vertical_threshold):
-                    return True
-    
+
+                close_mask = np.abs(current_z_values - last_z) <= vertical_threshold
+                if np.any(close_mask):
+                    # Add unique global indices that satisfy the vertical criterion
+                    for idx in current_point_indices[close_mask]:
+                        overlapping_indices.add(int(idx))
+
+                    if len(overlapping_indices) >= min_overlap:
+                        return True
+
         return False
 
     def pre_filter_cloud_matches(self, current_cloud_field):

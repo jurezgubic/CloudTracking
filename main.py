@@ -51,10 +51,11 @@ config = {
     'distance_threshold': 0,     # Max distance between merging clouds across a periodic boundary.
     'min_h_match_factor': 4.0,   # Minimum horizontal match factor. Min distance =  'min_h_match_factor' * 'horizontal_resolution'
     'min_v_match_factor': 4.0,   # Minimum vertical match factor. Min distance =  'min_v_match_factor' * 'horizontal_resolution'
-    'match_safety_factor_dynamic': 4.0,  # Dynamic safety factor for matching clouds based on velocities. 
+    'match_safety_factor_dynamic': 2.0,  # Dynamic safety factor for matching clouds based on velocities. 
     'bounding_box_safety_factor': 1.0, # Safety factor for pre-filtering potential matches (using centroids).
-    'max_expected_cloud_speed': 20.0,  # m/s. An estimate to constrain the search space for matching.
+    'max_expected_cloud_speed': 15.0,  # m/s. An estimate to constrain the search space for matching.
     'use_pre_filtering': True,   # If True, use a pre-filtering step to find potential matches (speed up matching).
+    'min_surface_overlap_points': 3,  # Require at least this many overlapping surface points for a match
 
     # Visualisation (somewhat deprecated)
     'plot_switch': False,        # If True, plot the cloud field at each timestep.
