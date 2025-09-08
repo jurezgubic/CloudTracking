@@ -28,13 +28,13 @@ file_name = {
 }
 
 # Processing Options
-total_timesteps = 10 # Number of timesteps to process
+total_timesteps = 6 # Number of timesteps to process
 
 # Cloud Definition and Tracking Configuration
 config = {
     # Cloud identification
     'min_size': 50,              # Minimum number of points for a cloud to be considered a cloud
-    'l_condition': 0.0001,      # kg/kg. Minimum liquid water content for a point to be a cloud.
+    'l_condition': 0.00001,      # kg/kg. Minimum liquid water content for a point to be a cloud.
     'w_condition': 0.0,          # m/s. Minimum vertical velocity for a point to be part of a cloud.
     'w_switch': False,           # If True, apply the 'w_condition' threshold.
     
@@ -49,9 +49,11 @@ config = {
 
     # Matching parameters
     'distance_threshold': 0,     # Max distance between merging clouds across a periodic boundary.
-    'match_safety_factor': 2.5,  # Safety factor for matching clouds based on point overlap.
+    'min_h_match_factor': 4.0,   # Minimum horizontal match factor. Min distance =  'min_h_match_factor' * 'horizontal_resolution'
+    'min_v_match_factor': 4.0,   # Minimum vertical match factor. Min distance =  'min_v_match_factor' * 'horizontal_resolution'
+    'match_safety_factor_dynamic': 4.0,  # Dynamic safety factor for matching clouds based on velocities. 
     'bounding_box_safety_factor': 1.0, # Safety factor for pre-filtering potential matches (using centroids).
-    'max_expected_cloud_speed': 30.0,  # m/s. An estimate to constrain the search space for matching.
+    'max_expected_cloud_speed': 20.0,  # m/s. An estimate to constrain the search space for matching.
     'use_pre_filtering': True,   # If True, use a pre-filtering step to find potential matches (speed up matching).
 
     # Visualisation (somewhat deprecated)
@@ -71,7 +73,7 @@ config = {
 
     # Environment ring (per-cloud surroundings) parameters
     'env_ring_max_distance': 3,   # Max Manhattan ring distance D around cloud edge (2D)
-    'env_periodic_rings': True,   # Respect periodic boundaries when forming rings
+    'env_periodic_rings': False,   # Respect periodic boundaries when forming rings
 }
 # --- End of user modifiable parameters ---
 

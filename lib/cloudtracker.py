@@ -304,7 +304,7 @@ class CloudTracker:
         
         # The safety factor creates a buffer around the predicted location.
         # It accounts for the cloud's acceleration/deceleration between timesteps.
-        safety_factor = self.config.get('match_safety_factor', 2.0) 
+        dynamic_safety_factor = self.config.get('match_safety_factor_dynamic', 2.0) 
 
         # --- Calculate a dynamic search radius based on the cloud's OWN velocity. ---
         # This ensures the search area is proportional to the cloud's specific momentum.
@@ -313,12 +313,12 @@ class CloudTracker:
         v_abs = abs(last_cloud_in_track.mean_v)
         w_abs = abs(last_cloud_in_track.mean_w)
 
-        horizontal_threshold = max(u_abs, v_abs) * timestep_duration * safety_factor
-        vertical_threshold = w_abs * timestep_duration * safety_factor
+        horizontal_threshold = max(u_abs, v_abs) * timestep_duration * dynamic_safety_factor
+        vertical_threshold = w_abs * timestep_duration * dynamic_safety_factor
         
         # Ensure the threshold is at least one grid cell to handle stationary clouds.
-        horizontal_threshold = max(horizontal_threshold, 2 * self.config['horizontal_resolution'])
-        vertical_threshold = max(vertical_threshold, 2 * self.config['horizontal_resolution'])
+        horizontal_threshold = max(horizontal_threshold, self.config['min_h_match_factor'] * self.config['horizontal_resolution'])
+        vertical_threshold = max(vertical_threshold, self.config['min_v_match_factor'] * self.config['horizontal_resolution'])
 
         # --- 2. Prepare Point Sets and Apply Drift (Vectorized) ---
         last_points = last_cloud_in_track.surface_points
