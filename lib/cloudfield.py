@@ -272,12 +272,25 @@ class CloudField:
                     cloud_mask = updated_labeled_array == region.label
                     point_indices = np.argwhere(cloud_mask)
                     
-                    # --- Surface Point Calculation ---
-                    # Erode the mask to find the "inner" points.
-                    inner_mask = binary_erosion(cloud_mask, structure=erosion_structure)
-                    # The surface is the original mask minus the inner part.
-                    surface_mask = cloud_mask & ~inner_mask
-                    surface_point_indices = np.argwhere(surface_mask)
+                    # --- Matching Point Calculation (surface + N inward layers) ---
+                    # How many inward layers to include for matching (1 = surface only)
+                    shell_layers = int(config.get('match_shell_layers', 1))
+                    if shell_layers < 1:
+                        shell_layers = 1
+                    
+                    # Build union of shells by successive erosions
+                    shell_union = np.zeros_like(cloud_mask, dtype=bool)
+                    prev_mask = cloud_mask
+                    for _ in range(shell_layers):
+                        inner_mask_iter = binary_erosion(prev_mask, structure=erosion_structure)
+                        layer_mask = prev_mask & ~inner_mask_iter
+                        shell_union |= layer_mask # 
+                        prev_mask = inner_mask_iter
+                        if not np.any(prev_mask):
+                            break
+                    
+                    # These are the points used for matching (augmented "surface")
+                    surface_point_indices = np.argwhere(shell_union)
 
                     # Skip if no points (shouldn't happen but just in case)
                     if len(point_indices) == 0:

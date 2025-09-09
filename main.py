@@ -56,11 +56,12 @@ config = {
     'max_expected_cloud_speed': 15.0,  # m/s. An estimate to constrain the search space for matching.
     'use_pre_filtering': True,   # If True, use a pre-filtering step to find potential matches (speed up matching).
     'min_surface_overlap_points': 3,  # Require at least this many overlapping surface points for a match
+    'match_shell_layers': 1,       # Number of cloud shell layers to include for matching (1 = surface points only)
 
     # Visualisation (somewhat deprecated)
     'plot_switch': False,        # If True, plot the cloud field at each timestep.
 
-    # Parameters for cloud base diagnosis
+    # Parameters for cloud base diagnosisq
     'base_scan_levels': 3,            # Number of levels to scan upward for diagnosed base from lowest cloud level
     'base_increase_threshold': 1.5,   # Factor required to increase base radius from lowest cloud level (1.5 = 50%)
 
