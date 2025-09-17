@@ -28,13 +28,13 @@ file_name = {
 }
 
 # Processing Options
-total_timesteps = 6 # Number of timesteps to process
+total_timesteps = 8 # Number of timesteps to process
 
 # Cloud Definition and Tracking Configuration
 config = {
     # Cloud identification
     'min_size': 50,              # Minimum number of points for a cloud to be considered a cloud
-    'l_condition': 0.00001,      # kg/kg. Minimum liquid water content for a point to be a cloud.
+    'l_condition': 0.000001,      # kg/kg. Minimum liquid water content for a point to be a cloud.
     'w_condition': 0.0,          # m/s. Minimum vertical velocity for a point to be part of a cloud.
     'w_switch': False,           # If True, apply the 'w_condition' threshold.
     
@@ -49,14 +49,14 @@ config = {
 
     # Matching parameters
     'distance_threshold': 0,     # Max distance between merging clouds across a periodic boundary.
-    'min_h_match_factor': 4.0,   # Minimum horizontal match factor. Min distance =  'min_h_match_factor' * 'horizontal_resolution'
-    'min_v_match_factor': 4.0,   # Minimum vertical match factor. Min distance =  'min_v_match_factor' * 'horizontal_resolution'
+    'min_h_match_factor': 2.0,   # Minimum horizontal match factor. Min distance =  'min_h_match_factor' * 'horizontal_resolution'
+    'min_v_match_factor': 2.0,   # Minimum vertical match factor. Min distance =  'min_v_match_factor' * 'horizontal_resolution'
     'match_safety_factor_dynamic': 2.0,  # Dynamic safety factor for matching clouds based on velocities. 
-    'bounding_box_safety_factor': 1.0, # Safety factor for pre-filtering potential matches (using centroids).
+    'bounding_box_safety_factor': 1.5, # Safety factor for pre-filtering potential matches (using centroids).
     'max_expected_cloud_speed': 15.0,  # m/s. An estimate to constrain the search space for matching.
     'use_pre_filtering': True,   # If True, use a pre-filtering step to find potential matches (speed up matching).
-    'min_surface_overlap_points': 3,  # Require at least this many overlapping surface points for a match
-    'match_shell_layers': 1,       # Number of cloud shell layers to include for matching (1 = surface points only)
+    'min_surface_overlap_points': 10,  # Require at least this many overlapping surface points for a match
+    'match_shell_layers': 3,       # Number of cloud shell layers to include for matching (1 = surface points only)
 
     # Visualisation (somewhat deprecated)
     'plot_switch': False,        # If True, plot the cloud field at each timestep.
