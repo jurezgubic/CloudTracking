@@ -44,9 +44,12 @@ class CloudTracker:
                 cloud.age = 0
                 self.cloud_tracks[cloud_id] = [cloud]
         else:
-            # Log whether pre-filtering is enabled
+            # Log whether pre-filtering is enabled and if fallback is allowed
             if self.config.get('use_pre_filtering', True):
-                print("Using centroid pre-filtering for cloud matching")
+                if self.config.get('switch_prefilter_fallback', True):
+                    print("Using centroid pre-filtering (fallback to full search: ON)")
+                else:
+                    print("Using centroid pre-filtering (fallback to full search: OFF)")
             else:
                 print("Pre-filtering disabled - checking all possible matches")
                 
@@ -484,9 +487,13 @@ class CloudTracker:
                 if horiz_dist <= search_radius and vert_dist <= search_radius:
                     candidate_ids.append(cloud_id)
             
-            # Fallback: if no candidates via centroid, try all clouds so is_match() can rescue via surface overlap
-            # To Do: Consider how much this fallback slows down the matching process
-            if not candidate_ids and self.config.get('use_pre_filtering', True):
+            # Optional fallback: if no centroid-based candidates, try full domain
+            # Controlled by config['switch_prefilter_fallback'] (default True)
+            if (
+                not candidate_ids
+                and self.config.get('use_pre_filtering', True)
+                and self.config.get('switch_prefilter_fallback', True)
+            ):
                 candidate_ids = list(current_cloud_field.clouds.keys())
 
             # Always register the track, even if candidate_ids ends up empty

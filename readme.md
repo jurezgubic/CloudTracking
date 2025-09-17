@@ -119,6 +119,7 @@ Default: exclude these from all analysis plots/statistics. To include: set `incl
 ### 8. Performance Notes
 - Global KD-tree of surface points built in `CloudField.build_global_surface_kdtree()` accelerates overlap queries.
 - Centroid pre-filtering (`pre_filter_cloud_matches`) reduces expensive surface overlap checks; can disable with config flag `use_pre_filtering=False`.
+- When pre-filtering is enabled, you can control the fallback to a full-domain search if no match candidates are found with `switch_prefilter_fallback` (default `True`). Set `switch_prefilter_fallback=False` to skip the fallback to all and move on. Saves some time.
 - For large domains consider future migration to xarray + dask (not yet implemented).
 
 ### 9. Troubleshooting
@@ -127,4 +128,3 @@ Default: exclude these from all analysis plots/statistics. To include: set `incl
 | No tracks in plots | All filtered out (too strict thresholds or all tainted) | Lower `--min-timesteps` / `--min-size`; inspect `valid_track` values |
 | Stats mostly empty | Placeholder code in statistics script not finished | Complete loops in `analysis/track_statistics.py` |
 | 3D viewer slow | Too many active tracks | Subset timesteps or add filtering logic |
-
