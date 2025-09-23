@@ -19,8 +19,14 @@ try:
 except Exception:
     _HAS_SCIPY = False
 
-def fit_cz(dsets: list[xr.Dataset], rho0: xr.DataArray, smooth: bool = True, s: float | None = None,
-           min_samples_per_z: int = 5) -> xr.DataArray:
+def fit_cz(
+    dsets: list[xr.Dataset],
+    rho0: xr.DataArray,
+    smooth: bool = True,
+    s: float | None = None,
+    min_samples_per_z: int = 5,
+    use: str = "auto",  # 'auto' | 'J' | 'J_rho'
+) -> xr.DataArray:
     """
     dsets: list of per-cloud reduced datasets from features.reduce_per_cloud (same z-grid).
     rho0: DataArray rho0[z]
@@ -29,15 +35,29 @@ def fit_cz(dsets: list[xr.Dataset], rho0: xr.DataArray, smooth: bool = True, s: 
     if len(dsets) == 0:
         raise ValueError("No clouds provided")
 
-    print(f"[fit_cz] clouds={len(dsets)}, smoothing={'on' if smooth else 'off'}", flush=True)
+    print(f"[fit_cz] clouds={len(dsets)}, smoothing={'on' if smooth else 'off'}, use={use}", flush=True)
     z = dsets[0]["z"].values
     # Stack ratios per z
     ratios = []
+    use = use.lower()
+    if use not in ("auto","j","j_rho"):
+        raise ValueError("use must be one of: 'auto','J','J_rho'")
     used = None
     for ds in dsets:
-        num = ds["J"] if "J" in ds else ds["J_rho"]        # [kg]
-        if used is None:
-            used = 'J' if 'J' in ds else 'J_rho'
+        if use == "j":
+            if "J" not in ds:
+                raise ValueError("Requested use='J' but input dataset missing 'J'")
+            num = ds["J"]
+            used = 'J'
+        elif use == "j_rho":
+            if "J_rho" not in ds:
+                raise ValueError("Requested use='J_rho' but input dataset missing 'J_rho'")
+            num = ds["J_rho"]
+            used = 'J_rho'
+        else:
+            num = ds["J"] if "J" in ds else ds["J_rho"]        # [kg]
+            if used is None:
+                used = 'J' if 'J' in ds else 'J_rho'
         den = rho0 * ds["tilde_a"] * ds["tilde_w_a"]        # [kg/s]
         r = xr.where(np.isfinite(den) & (den != 0), num / den, np.nan)  # [s]
         ratios.append(r)

@@ -143,19 +143,49 @@ def reduce_all_tracks(ds: xr.Dataset, dt: float,
     ntracks = ds.sizes.get('track', 0)
     out = []
     print(f"[reduce_all_tracks] start: ntracks={ntracks}, only_valid={only_valid}, min_timesteps={min_timesteps}", flush=True)
-    step = max(1, ntracks // 20)  # ~5% progress steps
-    for i in range(ntracks):
-        if only_valid and not _track_is_valid(ds, i):
-            continue
-        # Quick check: any finite area at any level/time?
-        A = ds['area_per_level'].isel(track=i)
-        if 'level' in A.dims:
-            A = A.rename({'level':'z'})
-        live_t = np.isfinite(A).any(dim='z') & (xr.where(np.isfinite(A), A, 0.0).sum(dim='z') > 0)
-        if int(live_t.sum().item()) < min_timesteps:
-            continue
-        out.append(reduce_track(ds, i, dt, rho0=rho0, positive_only=positive_only, require_valid=False))
-        if (i + 1) % step == 0:
-            print(f"[reduce_all_tracks] processed tracks: {i+1}/{ntracks}, reduced clouds={len(out)}", flush=True)
+
+    # Fast preselection using cheap per-track signals if available
+    candidates = None
+    if 'size' in ds:
+        s = ds['size']  # [track,time]
+        live_counts = (xr.where(np.isfinite(s), s, 0.0) > 0).sum(dim='time')  # count active times
+        cand_mask = live_counts >= min_timesteps
+        if only_valid and 'valid_track' in ds:
+            valid_mask = xr.DataArray((ds['valid_track'].values == 1), dims=('track',))
+            cand_mask = cand_mask & valid_mask
+        candidates = np.nonzero(cand_mask.values)[0]
+        print(f"[reduce_all_tracks] candidate tracks (by size): {len(candidates)}", flush=True)
+
+    if candidates is None:
+        # Fallback: scan all tracks, but still print heartbeat
+        step = max(1, ntracks // 20)
+        for i in range(ntracks):
+            if only_valid and not _track_is_valid(ds, i):
+                if (i + 1) % step == 0:
+                    print(f"[reduce_all_tracks] scanned {i+1}/{ntracks}, reduced={len(out)}", flush=True)
+                continue
+            A = ds['area_per_level'].isel(track=i)
+            if 'level' in A.dims:
+                A = A.rename({'level':'z'})
+            live_t = np.isfinite(A).any(dim='z') & (xr.where(np.isfinite(A), A, 0.0).sum(dim='z') > 0)
+            if int(live_t.sum().item()) < min_timesteps:
+                if (i + 1) % step == 0:
+                    print(f"[reduce_all_tracks] scanned {i+1}/{ntracks}, reduced={len(out)}", flush=True)
+                continue
+            out.append(reduce_track(ds, i, dt, rho0=rho0, positive_only=positive_only, require_valid=False))
+            if (i + 1) % step == 0:
+                print(f"[reduce_all_tracks] scanned {i+1}/{ntracks}, reduced={len(out)}", flush=True)
+    else:
+        # Iterate only candidates
+        n_c = len(candidates)
+        if n_c == 0:
+            print("[reduce_all_tracks] no candidates found.", flush=True)
+            return out
+        step = max(1, n_c // 20)
+        for j, i in enumerate(candidates):
+            out.append(reduce_track(ds, int(i), dt, rho0=rho0, positive_only=positive_only, require_valid=False))
+            if ((j + 1) % step) == 0:
+                print(f"[reduce_all_tracks] processed candidates: {j+1}/{n_c}, reduced={len(out)}", flush=True)
+
     print(f"[reduce_all_tracks] done: reduced_clouds={len(out)}", flush=True)
     return out

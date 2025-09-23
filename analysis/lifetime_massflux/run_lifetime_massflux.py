@@ -15,6 +15,7 @@ Notes
 
 from __future__ import annotations
 import argparse
+from pathlib import Path
 import numpy as np
 import xarray as xr
 
@@ -66,6 +67,7 @@ def main(args: argparse.Namespace) -> None:
     if len(red) == 0:
         print("No clouds passed the selection. Check min_timesteps or valid_track flags.")
         return
+    print(f"[run] reduced clouds: {len(red)}", flush=True)
 
     # Train/test split: first N-args.test_last for training, last for testing
     n = len(red)
@@ -77,7 +79,7 @@ def main(args: argparse.Namespace) -> None:
 
     # Fit c(z)
     print("[run] fitting c(z) ...", flush=True)
-    c_z = fit_cz(train, rho0=rho0, smooth=not args.no_smooth)
+    c_z = fit_cz(train, rho0=rho0, smooth=not args.no_smooth, use=("J_rho" if args.use_field_density else "auto"))
 
     # Evaluate on test
     if len(test) == 0:
@@ -98,9 +100,18 @@ def main(args: argparse.Namespace) -> None:
         print(f"Overall median MAPE: {overall:.2f}%")
 
     # Save c(z)
-    out_path = args.out
+    default_out = 'analysis/lifetime_massflux/cz_estimate.nc'
+    if args.out == default_out:
+        # If user runs from inside analysis/lifetime_massflux, avoid duplicating the path.
+        out_path = (Path(__file__).resolve().parent / 'cz_estimate.nc')
+        print(f"[run] resolving default --out to {out_path}", flush=True)
+    else:
+        out_path = Path(args.out).expanduser()
+        if not out_path.is_absolute():
+            out_path = Path.cwd() / out_path
+    out_path.parent.mkdir(parents=True, exist_ok=True)
     print(f"[run] saving c(z) to {out_path} ...", flush=True)
-    c_z.to_dataset(name='c').to_netcdf(out_path)
+    c_z.to_dataset(name='c').to_netcdf(str(out_path))
     print(f"[run] done. bye.", flush=True)
 
 
@@ -112,6 +123,7 @@ if __name__ == '__main__':
     p.add_argument('--min_timesteps', type=int, default=3, help='Min active timesteps per track')
     p.add_argument('--test_last', type=int, default=5, help='Number of clouds for test set (last)')
     p.add_argument('--no_smooth', action='store_true', help='Disable z-smoothing for c(z)')
+    p.add_argument('--use_field_density', action='store_true', help='Fit c(z) using J_rho (instantaneous density) instead of J')
     p.add_argument('--include_partial', action='store_true', help='Include partial (invalid) tracks')
     p.add_argument('--out', default='analysis/lifetime_massflux/cz_estimate.nc', help='Output NetCDF for c(z)')
     main(p.parse_args())
