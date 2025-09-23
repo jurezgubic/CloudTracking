@@ -29,7 +29,9 @@ from density import compute_rho0_from_raw
 
 def _load_rho0(ds: xr.Dataset, mode: str,
                raw_base: str | None = None,
-               file_map: dict | None = None) -> xr.DataArray | None:
+               file_map: dict | None = None,
+               sample_frac: float = 1.0,
+               time_max: int | None = None) -> xr.DataArray | None:
     if 'height' not in ds:
         print("[run] cloud_results.nc missing 'height' variable for vertical coordinate")
         return None
@@ -43,7 +45,15 @@ def _load_rho0(ds: xr.Dataset, mode: str,
             print("[run] raw_base path is required for --rho0 raw")
             return None
         tids = np.arange(nt) if nt is not None else None
-        rho0 = compute_rho0_from_raw(raw_base, file_map=file_map, time_indices=tids, reduce='median')
+        rho0 = compute_rho0_from_raw(
+            raw_base,
+            file_map=file_map,
+            time_indices=tids,
+            reduce='median',
+            sample_frac=sample_frac,
+            sample_seed=0,
+            time_max=time_max,
+        )
         if rho0 is None:
             return None
         if rho0.sizes['z'] != n:
@@ -81,11 +91,11 @@ def main(args: argparse.Namespace) -> None:
     print(f"[run] dims: track={ds.sizes.get('track',0)}, time={ds.sizes.get('time',0)}, level={ds.sizes.get('level',0)}", flush=True)
     # Build rho0(z) from requested source
     if args.rho0.lower() == 'raw':
-        print(f"[run] computing rho0(z) from raw at {args.raw_base} ... this can take a while", flush=True)
+        print(f"[run] computing rho0(z) from raw at {args.raw_base} with sample_frac={args.rho_sample_frac} and time_max={args.rho_time_max} ... this can take a while", flush=True)
     else:
         print(f"[run] loading rho0(z) source = {args.rho0}", flush=True)
     t_rho = time.time()
-    rho0 = _load_rho0(ds, args.rho0, raw_base=args.raw_base)
+    rho0 = _load_rho0(ds, args.rho0, raw_base=args.raw_base, sample_frac=float(args.rho_sample_frac or 1.0), time_max=args.rho_time_max)
     if rho0 is not None:
         print(f"[run] rho0 ready in {time.time()-t_rho:.1f}s", flush=True)
     if rho0 is None or not np.isfinite(rho0.values).any():
@@ -157,10 +167,12 @@ def main(args: argparse.Namespace) -> None:
 
 if __name__ == '__main__':
     p = argparse.ArgumentParser(description='Lifetime mass-flux analysis on cloud_results.nc')
-    p.add_argument('--nc', default='../../cloud_results.nc', help='Path to cloud_results.nc')
+    p.add_argument('--nc', default='../../cloud_results_0.000001_30min.nc', help='Path to cloud_results.nc')
     p.add_argument('--dt', type=float, default=60.0, help='Timestep duration in seconds')
     p.add_argument('--rho0', default='raw', choices=['raw','env','var'], help='Reference density source')
     p.add_argument('--raw_base', default='/Users/jure/PhD/coding/RICO_1hr/', help='Base path to raw LES files for --rho0 raw')
+    p.add_argument('--rho_sample_frac', type=float, default=0.001, help='Fraction of horizontal domain to sample for rho0 (random)')
+    p.add_argument('--rho_time_max', type=int, default=1, help='Max number of timesteps to use for rho0')
     p.add_argument('--min_timesteps', type=int, default=3, help='Min active timesteps per track')
     p.add_argument('--test_last', type=int, default=5, help='Number of clouds for test set (last)')
     p.add_argument('--no_smooth', action='store_true', help='Disable z-smoothing for c(z)')

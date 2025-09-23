@@ -18,10 +18,16 @@ import numpy as np
 # Field-based reference density rho0(z)
 # ----------------------------
 
-def compute_rho0_from_raw(base_path: str,
-                          file_map: dict | None = None,
-                          time_indices: np.ndarray | None = None,
-                          reduce: str = 'median') -> xr.DataArray:
+def compute_rho0_from_raw(
+    base_path: str,
+    file_map: dict | None = None,
+    time_indices: np.ndarray | None = None,
+    reduce: str = 'median',
+    sample_frac: float = 1.0,
+    sample_seed: int | None = None,
+    time_max: int | None = None,
+    sample_mode: str = 'stride',  # 'stride' or 'random'
+) -> xr.DataArray:
     """
     Compute a domain-mean reference density profile rho0(z) from raw LES fields
     using the thermodynamic formula described in this project.
@@ -33,6 +39,8 @@ def compute_rho0_from_raw(base_path: str,
     - t: liquid-water potential temperature theta_l (K)
 
     Returns xr.DataArray rho0[z] (kg/m^3). If cannot compute, returns None and prints a note.
+    I can random-subsample the horizontal domain via sample_frac (e.g. 0.01 for one percent of points).
+    I can also limit number of time steps via time_max.
     """
     import xarray as xr
     import numpy as np
@@ -93,11 +101,46 @@ def compute_rho0_from_raw(base_path: str,
     p = _normalize_dims(p)
     theta_l = _normalize_dims(theta_l)
 
+    # Optionally limit time indices
     if time_indices is not None:
         l_gpkg = l_gpkg.isel(time=time_indices)
         q_gpkg = q_gpkg.isel(time=time_indices)
         p = p.isel(time=time_indices)
         theta_l = theta_l.isel(time=time_indices)
+    elif time_max is not None and 'time' in l_gpkg.dims:
+        l_gpkg = l_gpkg.isel(time=slice(0, int(time_max)))
+        q_gpkg = q_gpkg.isel(time=slice(0, int(time_max)))
+        p = p.isel(time=slice(0, int(time_max)))
+        theta_l = theta_l.isel(time=slice(0, int(time_max)))
+
+    # Optionally subsample horizontal dims to speed up
+    if sample_frac < 1.0:
+        # Build one set of indexers and apply to all fields to keep alignment
+        ref = p
+        spatial = [d for d in ref.dims if d not in ('time','z')]
+        if spatial:
+            per_dim_frac = sample_frac ** (1.0 / len(spatial))
+            indexers = {}
+            if sample_mode == 'random':
+                rng = np.random.default_rng(sample_seed)
+                for d in spatial:
+                    n = ref.sizes[d]
+                    k = max(1, int(round(per_dim_frac * n)))
+                    idx = np.sort(rng.choice(n, size=k, replace=False))
+                    indexers[d] = idx
+            else:
+                # stride decimation: contiguous strided reads (much faster than random gather)
+                for d in spatial:
+                    n = ref.sizes[d]
+                    step = max(1, int(round(1.0 / per_dim_frac)))
+                    indexers[d] = slice(0, n, step)
+            try:
+                l_gpkg = l_gpkg.isel(**{d: indexers[d] for d in l_gpkg.dims if d in indexers})
+                q_gpkg = q_gpkg.isel(**{d: indexers[d] for d in q_gpkg.dims if d in indexers})
+                p = p.isel(**{d: indexers[d] for d in p.dims if d in indexers})
+                theta_l = theta_l.isel(**{d: indexers[d] for d in theta_l.dims if d in indexers})
+            except Exception as e:
+                print(f"[compute_rho0_from_raw] subsample apply failed: {e}")
 
     q_l = l_gpkg.astype('float64') / 1000.0  # kg/kg
     q_t = q_gpkg.astype('float64') / 1000.0  # kg/kg
