@@ -1,25 +1,24 @@
 """
 Lifetime reductions from the tracking output (cloud_results.nc).
 
-What we compute per cloud (by height z):
-- S_a(z) = ∑_t A(z,t) dt [m^2 s]  (time-integrated in‑cloud area)
-- S_aw(z) = ∑_t A(z,t) max(⟨w⟩(z,t), 0) dt [m^3]  (time‑integrated upward volume flux)
-- T_c = N_valid · dt [s]  (cloud lifetime in seconds)
-- tilde_a(z) = S_a/T_c [m^2]  (lifetime‑mean area)
-- tilde_w_a(z) = S_aw/S_a [m s^-1]  (area‑weighted lifetime‑mean w+, i.e. mean of upward part)
-- J_rho(z) = ∑_t max(M(z,t), 0) dt [kg]  (time‑integrated mass flux using instantaneous density)
-- If a reference density profile ρ0(z) is provided, also J(z) = ρ0(z) · S_aw(z) [kg].
+What I compute per cloud (by height z):
+- S_a(z) = sum over t of A(z,t) * dt [m^2 s]  (time integrated in-cloud area)
+- S_aw(z) = sum over t of A(z,t) * max(mean w(z,t), 0) * dt [m^3]  (time integrated upward volume)
+- T_c = number of active times * dt [s]  (cloud lifetime in seconds)
+- tilde_a(z) = S_a/T_c [m^2]  (lifetime mean area)
+- tilde_w_a(z) = S_aw/S_a [m s^-1]  (area weighted lifetime mean w_plus)
+- J_rho(z) = sum over t of max(M(z,t), 0) * dt [kg]  (time integrated mass using instantaneous density)
+- If a reference density profile rho0(z) is provided, also J(z) = rho0(z) * S_aw(z) [kg].
 
 Inputs from cloud_results.nc (per track, time, level):
 - area_per_level[track,time,level] = A(z,t) [m^2]
-- w_per_level[track,time,level] = ⟨w⟩(z,t) over in‑cloud points [m s^-1]
-- mass_flux_per_level[track,time,level] = M(z,t) = ∑ cells ρ w ΔxΔy [kg s^-1]
+- w_per_level[track,time,level] = mean w(z,t) over in-cloud points [m s^-1]
+- mass_flux_per_level[track,time,level] = M(z,t) = sum over cells of rho * w * dx * dy [kg s^-1]
 - height[level] = z [m]
-- valid_track[track] ∈ {0,1}. We normally use only valid (complete lifetime) tracks.
+- valid_track[track] in {0,1}. I normally use only valid (complete lifetime) tracks.
 
-Note on signs: we use only upward transport (w+ or M+). This matches the idea that
-convective mass flux is an updraft quantity. Using M+ or ⟨w⟩+A gives nearly the same
-result; the former additionally includes density variations.
+Note on signs: I use only upward transport (w_plus or M_plus). Convective mass flux is an updraft thing.
+Using M_plus or mean w_plus * area gives nearly the same result; the former includes density variations.
 """
 
 from __future__ import annotations
@@ -60,7 +59,7 @@ def reduce_track(ds: xr.Dataset, track_index: int, dt: float,
         raise ValueError("Track is flagged invalid (partial lifetime). Set require_valid=False to force.")
 
     z = _z_coord(ds)
-    # say what we doing (simple progress)
+    # say what I am doing (simple progress)
     print(f"[reduce_track] reducing track {track_index} ...", flush=True)
     # Extract per‑level, per‑time arrays for this track
     A = ds['area_per_level'].isel(track=track_index)
@@ -84,7 +83,7 @@ def reduce_track(ds: xr.Dataset, track_index: int, dt: float,
     print(f"[reduce_track] active time steps = {nt}", flush=True)
 
     # Use upward part only if requested
-    # physics: convective mass flux is about updrafts, so keep w+ and M+
+    # physics: convective mass flux is about updrafts, so keep w_plus and M_plus
     if positive_only:
         Wp = xr.where(W > 0.0, W, 0.0)
         Mp = xr.where(M > 0.0, M, 0.0)
@@ -92,8 +91,8 @@ def reduce_track(ds: xr.Dataset, track_index: int, dt: float,
         Wp = xr.where(np.isfinite(W), W, 0.0)
         Mp = xr.where(np.isfinite(M), M, 0.0)
 
-    # Time‑integrated area and volume flux
-    # physics: S_a = ∑ A dt  (area*time). S_aw = ∑ A*w+ dt (volume)
+    # Time integrated area and volume flux
+    # physics: S_a = sum A * dt  (area time). S_aw = sum A * w_plus * dt (volume)
     S_a = (xr.where(np.isfinite(A), A, 0.0) * dt).sum(dim='time')          # [z] m^2 s
     S_aw = (xr.where(np.isfinite(A*Wp), A*Wp, 0.0) * dt).sum(dim='time')   # [z] m^3
 
@@ -101,7 +100,7 @@ def reduce_track(ds: xr.Dataset, track_index: int, dt: float,
     T_c = float(nt * dt)
 
     # Lifetime means
-    # physics: divide time-integrals by lifetime
+    # physics: divide time integrals by lifetime
     tilde_a = xr.where(T_c > 0, S_a / T_c, np.nan)                         # [level] m^2
     tilde_w_a = xr.where(S_a > eps, S_aw / S_a, np.nan)                    # [level] m s^-1
 

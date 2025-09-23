@@ -1,8 +1,8 @@
 """
 Predict hat J(z) = rho0(z) * c(z) * tilde_a(z) * tilde_w_a(z)
 
-# physics: we take lifetime‑mean area and updraft velocity, multiply by rho0 and c(z)
-# c(z) is like an empirical "lifetime time-scale" per height.
+# physics: I take lifetime mean area and updraft velocity, multiply by rho0 and c(z)
+# c(z) is like an empirical lifetime time-scale per height.
 """
 
 from __future__ import annotations

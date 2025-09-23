@@ -18,48 +18,82 @@ import argparse
 from pathlib import Path
 import numpy as np
 import xarray as xr
+import time
 
 from features import reduce_all_tracks
 from cz_estimator import fit_cz
 from predict import predict_j
 from metrics import mape_per_z
+from density import compute_rho0_from_raw
 
 
-def _load_rho0(ds: xr.Dataset, mode: str) -> xr.DataArray:
+def _load_rho0(ds: xr.Dataset, mode: str,
+               raw_base: str | None = None,
+               file_map: dict | None = None) -> xr.DataArray | None:
     if 'height' not in ds:
-        raise ValueError("cloud_results.nc missing 'height' variable for vertical coordinate")
+        print("[run] cloud_results.nc missing 'height' variable for vertical coordinate")
+        return None
     z = xr.DataArray(ds['height'].values, dims=('z',), name='z')
     n = z.sizes['z']
     mode = mode.lower()
-    if mode == 'ones':
-        return xr.DataArray(np.ones(n, dtype=float), dims=('z',), coords=dict(z=z))
+    if mode == 'raw':
+        # Use raw LES fields to compute rho0 via thermodynamic relation
+        nt = ds.sizes.get('time', None)
+        if raw_base is None:
+            print("[run] raw_base path is required for --rho0 raw")
+            return None
+        tids = np.arange(nt) if nt is not None else None
+        rho0 = compute_rho0_from_raw(raw_base, file_map=file_map, time_indices=tids, reduce='median')
+        if rho0 is None:
+            return None
+        if rho0.sizes['z'] != n:
+            print("[run] rho0(z) from raw files does not match cloud_results level count")
+            return None
+        return rho0
     if mode == 'env':
         if 'env_rho_mean_per_level' in ds:
             vals = np.asarray(ds['env_rho_mean_per_level'].values, dtype=float)
             if vals.size != n:
-                raise ValueError("env_rho_mean_per_level length does not match number of levels")
+                print("[run] env_rho_mean_per_level length does not match number of levels")
+                return None
             return xr.DataArray(vals, dims=('z',), coords=dict(z=z))
-        print("Warning: env_rho_mean_per_level not found. Falling back to ones.")
-        return xr.DataArray(np.ones(n, dtype=float), dims=('z',), coords=dict(z=z))
+        print("[run] env_rho_mean_per_level not found in cloud_results.nc")
+        return None
     if mode == 'var':
         name = 'rho0_per_level'
         if name in ds:
             vals = np.asarray(ds[name].values, dtype=float)
             if vals.size != n:
-                raise ValueError(f"{name} length does not match number of levels")
+                print(f"[run] {name} length does not match number of levels")
+                return None
             return xr.DataArray(vals, dims=('z',), coords=dict(z=z))
-        raise ValueError("rho0_per_level not found in dataset")
-    raise ValueError("--rho0 must be one of: ones, env, var")
+        print("[run] rho0_per_level not found in dataset")
+        return None
+    print("[run] --rho0 must be one of: raw, env, var")
+    return None
 
 
 def main(args: argparse.Namespace) -> None:
+    t_all = time.time()
     print(f"[run] opening {args.nc} ...", flush=True)
     ds = xr.open_dataset(args.nc)
-    # show some basic sizes so user knows it's alive
+    # show some basic sizes so I know it is alive
     print(f"[run] dims: track={ds.sizes.get('track',0)}, time={ds.sizes.get('time',0)}, level={ds.sizes.get('level',0)}", flush=True)
-    rho0 = _load_rho0(ds, args.rho0)
+    # Build rho0(z) from requested source
+    if args.rho0.lower() == 'raw':
+        print(f"[run] computing rho0(z) from raw at {args.raw_base} ... this can take a while", flush=True)
+    else:
+        print(f"[run] loading rho0(z) source = {args.rho0}", flush=True)
+    t_rho = time.time()
+    rho0 = _load_rho0(ds, args.rho0, raw_base=args.raw_base)
+    if rho0 is not None:
+        print(f"[run] rho0 ready in {time.time()-t_rho:.1f}s", flush=True)
+    if rho0 is None or not np.isfinite(rho0.values).any():
+        print("[run] could not compute rho0(z). stopping.")
+        return
     # Reduce all valid tracks
     print(f"[run] reducing tracks (dt={args.dt}s, rho0='{args.rho0}') ...", flush=True)
+    t_red = time.time()
     red = reduce_all_tracks(ds, dt=float(args.dt), rho0=rho0,
                             only_valid=not args.include_partial,
                             min_timesteps=args.min_timesteps,
@@ -67,7 +101,7 @@ def main(args: argparse.Namespace) -> None:
     if len(red) == 0:
         print("No clouds passed the selection. Check min_timesteps or valid_track flags.")
         return
-    print(f"[run] reduced clouds: {len(red)}", flush=True)
+    print(f"[run] reduced clouds: {len(red)} in {time.time()-t_red:.1f}s", flush=True)
 
     # Train/test split: first N-args.test_last for training, last for testing
     n = len(red)
@@ -79,13 +113,16 @@ def main(args: argparse.Namespace) -> None:
 
     # Fit c(z)
     print("[run] fitting c(z) ...", flush=True)
+    t_fit = time.time()
     c_z = fit_cz(train, rho0=rho0, smooth=not args.no_smooth, use=("J_rho" if args.use_field_density else "auto"))
+    print(f"[run] fit done in {time.time()-t_fit:.1f}s", flush=True)
 
     # Evaluate on test
     if len(test) == 0:
         print("No test clouds; skipping metrics.")
     else:
         print("[run] predicting and scoring on test clouds ...", flush=True)
+        t_eval = time.time()
         J_list = []; Jhat_list = []
         for i, dsr in enumerate(test):
             J = dsr['J'] if 'J' in dsr else dsr['J_rho']
@@ -98,6 +135,7 @@ def main(args: argparse.Namespace) -> None:
         print("Median MAPE per z (%):")
         print(np.array2string(mape.values, precision=1, separator=", "))
         print(f"Overall median MAPE: {overall:.2f}%")
+        print(f"[run] eval done in {time.time()-t_eval:.1f}s", flush=True)
 
     # Save c(z)
     default_out = 'analysis/lifetime_massflux/cz_estimate.nc'
@@ -111,15 +149,18 @@ def main(args: argparse.Namespace) -> None:
             out_path = Path.cwd() / out_path
     out_path.parent.mkdir(parents=True, exist_ok=True)
     print(f"[run] saving c(z) to {out_path} ...", flush=True)
+    t_save = time.time()
     c_z.to_dataset(name='c').to_netcdf(str(out_path))
-    print(f"[run] done. bye.", flush=True)
+    print(f"[run] saved in {time.time()-t_save:.1f}s", flush=True)
+    print(f"[run] total time {time.time()-t_all:.1f}s. bye.", flush=True)
 
 
 if __name__ == '__main__':
     p = argparse.ArgumentParser(description='Lifetime mass-flux analysis on cloud_results.nc')
     p.add_argument('--nc', default='../../cloud_results.nc', help='Path to cloud_results.nc')
     p.add_argument('--dt', type=float, default=60.0, help='Timestep duration in seconds')
-    p.add_argument('--rho0', default='ones', choices=['ones','env','var'], help='Reference density source')
+    p.add_argument('--rho0', default='raw', choices=['raw','env','var'], help='Reference density source')
+    p.add_argument('--raw_base', default='/Users/jure/PhD/coding/RICO_1hr/', help='Base path to raw LES files for --rho0 raw')
     p.add_argument('--min_timesteps', type=int, default=3, help='Min active timesteps per track')
     p.add_argument('--test_last', type=int, default=5, help='Number of clouds for test set (last)')
     p.add_argument('--no_smooth', action='store_true', help='Disable z-smoothing for c(z)')

@@ -1,23 +1,18 @@
 """
-Estimate c(z) from per‑cloud reductions using a median of ratios.
+Estimate c(z) from per-cloud reductions using a median of ratios.
 
 # physics idea:
-# we want J(z) ≈ rho0(z) * c(z) * tilde_a(z) * tilde_w_plus(z)
-# so per cloud we form r(z) = J / (rho0 * tilde_a * tilde_w_plus). r has units of seconds.
-# then take median over clouds. smooth in z to reduce noise if you want.
+# I want J(z) ~ rho0(z) * c(z) * tilde_a(z) * tilde_w_plus(z)
+# So per cloud I form r(z) = J / (rho0 * tilde_a * tilde_w_plus). r has units of seconds.
+# Then take median over clouds. Smooth in z to reduce noise.
 
-# note: if J_rho used (instantaneous density), c(z) will also soak up density bias vs rho0.
+# note: if J_rho is used (instantaneous density), c(z) also absorbs density bias vs rho0.
 """
 
 from __future__ import annotations
 import numpy as np
 import xarray as xr
-
-try:
-    from scipy.interpolate import UnivariateSpline
-    _HAS_SCIPY = True
-except Exception:
-    _HAS_SCIPY = False
+from scipy.interpolate import UnivariateSpline
 
 def fit_cz(
     dsets: list[xr.Dataset],
@@ -41,19 +36,25 @@ def fit_cz(
     ratios = []
     use = use.lower()
     if use not in ("auto","j","j_rho"):
-        raise ValueError("use must be one of: 'auto','J','J_rho'")
+        use = "auto"
     used = None
     for ds in dsets:
         if use == "j":
             if "J" not in ds:
-                raise ValueError("Requested use='J' but input dataset missing 'J'")
-            num = ds["J"]
-            used = 'J'
+                # fall back to J_rho if J is missing
+                num = ds.get("J_rho")
+                used = 'J_rho'
+            else:
+                num = ds["J"]
+                used = 'J'
         elif use == "j_rho":
             if "J_rho" not in ds:
-                raise ValueError("Requested use='J_rho' but input dataset missing 'J_rho'")
-            num = ds["J_rho"]
-            used = 'J_rho'
+                # fall back to J if J_rho is missing
+                num = ds.get("J")
+                used = 'J'
+            else:
+                num = ds["J_rho"]
+                used = 'J_rho'
         else:
             num = ds["J"] if "J" in ds else ds["J_rho"]        # [kg]
             if used is None:
@@ -71,7 +72,7 @@ def fit_cz(
     c_raw = c_raw.rename("c_raw").assign_coords(z=z)
     print("[fit_cz] computed raw median c(z)", flush=True)
 
-    if smooth and _HAS_SCIPY:
+    if smooth:
         # Smooth only finite segments; preserve NaNs
         c_vals = c_raw.values
         mask = np.isfinite(c_vals)
@@ -88,17 +89,6 @@ def fit_cz(
             c_smooth = c_raw.rename("c")
         print("[fit_cz] smoothing with SciPy spline", flush=True)
     else:
-        # Fallback: running median (window=5)
-        w = 5
-        vals = c_raw.values
-        out = np.full_like(vals, np.nan, dtype=float)
-        for i in range(len(vals)):
-            lo = max(0, i - w//2); hi = min(len(vals), i + w//2 + 1)
-            window = vals[lo:hi]
-            ws = window[np.isfinite(window)]
-            if ws.size:
-                out[i] = np.median(ws)
-        c_smooth = xr.DataArray(out, coords=dict(z=z), dims=("z",), name="c")
-        print("[fit_cz] smoothing with running median (no SciPy)", flush=True)
+        c_smooth = c_raw.rename("c")
 
     return c_smooth
