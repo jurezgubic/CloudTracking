@@ -3,14 +3,14 @@ Run lifetime mass-flux analysis on cloud_results.nc and print metrics.
 
 Usage (from repo root or analysis folder):
   python analysis/lifetime_massflux/run_lifetime_massflux.py \
-         --nc cloud_results.nc --dt 60 --rho0 ones --min_timesteps 3
+         --nc cloud_results.nc --dt 60 --rho0 raw --min_timesteps 3
 
 Notes
 - dt [s] is the timestep duration used when writing cloud_results.nc.
 - rho0: choose a reference density profile source:
-  * ones:   use rho0(z) = 1 everywhere (default). c(z) then absorbs density.
-  * env:    use env_rho_mean_per_level[level] if present in the file.
-  * var:    use rho0_per_level[level] if present (custom variable).
+  * raw:   compute rho0(z) from raw LES files under --raw_base.
+  * env:   use env_rho_mean_per_level[level] if present in the file.
+  * var:   use rho0_per_level[level] if present (custom variable).
 """
 
 from __future__ import annotations
@@ -104,7 +104,9 @@ def main(args: argparse.Namespace) -> None:
     # Reduce all valid tracks
     print(f"[run] reducing tracks (dt={args.dt}s, rho0='{args.rho0}') ...", flush=True)
     t_red = time.time()
-    red = reduce_all_tracks(ds, dt=float(args.dt), rho0=rho0,
+    # prefer dt from dataset attrs
+    dt_eff = float(ds.attrs.get('timestep_duration_seconds', args.dt))
+    red = reduce_all_tracks(ds, dt=dt_eff, rho0=rho0,
                             only_valid=not args.include_partial,
                             min_timesteps=args.min_timesteps,
                             positive_only=True)
@@ -124,8 +126,10 @@ def main(args: argparse.Namespace) -> None:
     # Fit c(z)
     print("[run] fitting c(z) ...", flush=True)
     t_fit = time.time()
-    c_z = fit_cz(train, rho0=rho0, smooth=not args.no_smooth, use=("J_rho" if args.use_field_density else "auto"))
-    print(f"[run] fit done in {time.time()-t_fit:.1f}s", flush=True)
+    cz_ds = fit_cz(train, rho0=rho0, smooth=not args.no_smooth, use=("J_rho" if args.use_field_density else "auto"))
+    c_z = cz_ds['c']
+    target = cz_ds.attrs.get('target','J')
+    print(f"[run] fit done in {time.time()-t_fit:.1f}s (target={target})", flush=True)
 
     # Evaluate on test
     if len(test) == 0:
@@ -135,16 +139,38 @@ def main(args: argparse.Namespace) -> None:
         t_eval = time.time()
         J_list = []; Jhat_list = []
         for i, dsr in enumerate(test):
-            J = dsr['J'] if 'J' in dsr else dsr['J_rho']
+            J = dsr[target]
             J_list.append(J.expand_dims(cloud=[i]))
             Jhat_list.append(predict_j(dsr, c_z, rho0).expand_dims(cloud=[i]))
         J_stack = xr.concat(J_list, dim='cloud')
         Jhat_stack = xr.concat(Jhat_list, dim='cloud')
-        mape = mape_per_z(J_stack, Jhat_stack).median(dim='cloud', skipna=True)
-        overall = float(np.nanmedian(mape.values))
-        print("Median MAPE per z (%):")
+        # restrict metrics to occupied levels per cloud
+        Sa_stack = xr.concat([dsr['S_a'].expand_dims(cloud=[i]) for i, dsr in enumerate(test)], dim='cloud')
+        present = Sa_stack > 0
+        mape = mape_per_z(J_stack, Jhat_stack).where(present)
+        # 2D per-cloud matrix
+        print("Median MAPE per z (%), per-cloud rows:")
         print(np.array2string(mape.values, precision=1, separator=", "))
-        print(f"Overall median MAPE: {overall:.2f}%")
+        # 1D per-z median and overall across occupied levels
+        mape_z = mape.median(dim='cloud', skipna=True)
+        overall = float(mape_z.median(skipna=True).values)
+        print("Per-z median MAPE (%):", np.array2string(mape_z.values, precision=1, separator=", "))
+        print("Overall median MAPE (occupied levels):", overall)
+        coverage = present.mean(dim='cloud').rename('coverage')
+        print("Coverage per z:", np.array2string(coverage.values, precision=2, separator=", "))
+        # Lifetime diagnostics
+        try:
+            train_tc = np.median([float(ds.attrs['T_c']) for ds in train])
+            test_tc = [float(ds.attrs['T_c']) for ds in test]
+            print("Train median T_c [s]:", train_tc)
+            print("Test T_c [s]:", test_tc)
+        except Exception:
+            pass
+        try:
+            cz_vals = c_z.values if isinstance(c_z, xr.DataArray) else c_z['c'].values
+            print("Median c(z) [s]:", float(np.nanmedian(cz_vals)))
+        except Exception:
+            pass
         print(f"[run] eval done in {time.time()-t_eval:.1f}s", flush=True)
 
     # Save c(z)

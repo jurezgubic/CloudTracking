@@ -21,6 +21,9 @@ figs_notebook/
 # pdf files
 *.pdf
 
+# png files
+*.png
+
 # IDEs
 .vscode/
 

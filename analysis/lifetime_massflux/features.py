@@ -3,22 +3,24 @@ Lifetime reductions from the tracking output (cloud_results.nc).
 
 What I compute per cloud (by height z):
 - S_a(z) = sum over t of A(z,t) * dt [m^2 s]  (time integrated in-cloud area)
-- S_aw(z) = sum over t of A(z,t) * max(mean w(z,t), 0) * dt [m^3]  (time integrated upward volume)
+- S_aw(z) [m^3]: upward volume transport integrated over time
+  - preferred exact: sum over (y,x,t) of w_plus(z,y,x,t) * dx * dy * dt inside mask
+  - fallback: use aggregates via mass flux per level
 - T_c = number of active times * dt [s]  (cloud lifetime in seconds)
 - tilde_a(z) = S_a/T_c [m^2]  (lifetime mean area)
 - tilde_w_a(z) = S_aw/S_a [m s^-1]  (area weighted lifetime mean w_plus)
 - J_rho(z) = sum over t of max(M(z,t), 0) * dt [kg]  (time integrated mass using instantaneous density)
-- If a reference density profile rho0(z) is provided, also J(z) = rho0(z) * S_aw(z) [kg].
+- J(z) [kg] = rho0(z) * S_aw(z)
 
 Inputs from cloud_results.nc (per track, time, level):
 - area_per_level[track,time,level] = A(z,t) [m^2]
 - w_per_level[track,time,level] = mean w(z,t) over in-cloud points [m s^-1]
 - mass_flux_per_level[track,time,level] = M(z,t) = sum over cells of rho * w * dx * dy [kg s^-1]
+- Optionally 4-D: mask[track,level,y,x,time], w[track,level,y,x,time]
 - height[level] = z [m]
 - valid_track[track] in {0,1}. I normally use only valid (complete lifetime) tracks.
 
 Note on signs: I use only upward transport (w_plus or M_plus). Convective mass flux is an updraft thing.
-Using M_plus or mean w_plus * area gives nearly the same result; the former includes density variations.
 """
 
 from __future__ import annotations
@@ -27,6 +29,9 @@ import xarray as xr
 
 def _z_coord(ds: xr.Dataset) -> xr.DataArray:
     """Return height coord as DataArray named 'z'."""
+    if ds is None:
+        print("[_z_coord] got None dataset. i stop.")
+        return None
     if 'height' in ds:
         return xr.DataArray(ds['height'].values, dims=('z',), name='z')
     if 'level' in ds.dims:
@@ -51,9 +56,9 @@ def reduce_track(ds: xr.Dataset, track_index: int, dt: float,
     Reduce one tracked cloud (one row in 'track') to lifetime-mean profiles.
 
     Physics:
-    - Area A(z,t) times w+(z,t) integrated over time gives an upward volume transport S_aw(z).
-    - Multiplying S_aw by a reference density ρ0(z) gives a time‑integrated mass J(z) [kg].
-    - Using instantaneous density inside the cloud and summing M+(z,t) dt gives J_rho(z) [kg].
+    - Area A(z,t) times w_plus(z,t) integrated over time gives an upward volume transport S_aw(z).
+    - Multiplying S_aw by a reference density rho0(z) gives a time integrated mass J(z) [kg].
+    - Using instantaneous density inside the cloud and summing M_plus(z,t) * dt gives J_rho(z) [kg].
     """
     if require_valid and not _track_is_valid(ds, track_index):
         raise ValueError("Track is flagged invalid (partial lifetime). Set require_valid=False to force.")
@@ -61,15 +66,31 @@ def reduce_track(ds: xr.Dataset, track_index: int, dt: float,
     z = _z_coord(ds)
     # say what I am doing (simple progress)
     print(f"[reduce_track] reducing track {track_index} ...", flush=True)
-    # Extract per‑level, per‑time arrays for this track
+    # Extract per-level, per-time arrays for this track
     A = ds['area_per_level'].isel(track=track_index)
     W = ds['w_per_level'].isel(track=track_index)
-    M = ds['mass_flux_per_level'].isel(track=track_index)
+    # Prefer updraft-only mass flux per level if available; else legacy total mass flux
+    if 'mass_flux_updraft_per_level' in ds:
+        M = ds['mass_flux_updraft_per_level'].isel(track=track_index)
+    else:
+        M = ds['mass_flux_per_level'].isel(track=track_index)
     # Ensure vertical dim is named 'z' for clarity/consistency
     if 'level' in A.dims:
         A = A.rename({'level':'z'})
         W = W.rename({'level':'z'})
         M = M.rename({'level':'z'})
+
+    # Optional 4-D inputs at full resolution (preferred when available)
+    mask4d = None
+    w4d = None
+    if 'mask' in ds:
+        mask4d = ds['mask'].isel(track=track_index)
+        if 'level' in mask4d.dims:
+            mask4d = mask4d.rename({'level':'z'})
+    if 'w' in ds:
+        w4d = ds['w'].isel(track=track_index)
+        if 'level' in w4d.dims:
+            w4d = w4d.rename({'level':'z'})
 
     # Time indices when the cloud exists (any level has finite area)
     live_t = np.isfinite(A).any(dim='z') & (xr.where(np.isfinite(A), A, 0.0).sum(dim='z') > 0)
@@ -92,9 +113,34 @@ def reduce_track(ds: xr.Dataset, track_index: int, dt: float,
         Mp = xr.where(np.isfinite(M), M, 0.0)
 
     # Time integrated area and volume flux
-    # physics: S_a = sum A * dt  (area time). S_aw = sum A * w_plus * dt (volume)
+    # physics: S_a = sum A * dt  (area time).
     S_a = (xr.where(np.isfinite(A), A, 0.0) * dt).sum(dim='time')          # [z] m^2 s
-    S_aw = (xr.where(np.isfinite(A*Wp), A*Wp, 0.0) * dt).sum(dim='time')   # [z] m^3
+    # Preferred exact S_aw from 4-D if available; else fallback using aggregates (mass-flux based)
+    S_aw = None
+    if (mask4d is not None) and (w4d is not None):
+        # need dx, dy for cell area
+        dx = ds.attrs.get('dx', None)
+        dy = ds.attrs.get('dy', None)
+        if (dx is None) or (dy is None):
+            hr = ds.attrs.get('horizontal_resolution', None)
+            if hr is not None:
+                dx = dy = float(hr)
+        if (dx is None) or (dy is None):
+            raise ValueError("4-D S_aw requires dx,dy in attrs (or horizontal_resolution)")
+        w_plus_full = xr.where(w4d > 0.0, w4d, 0.0)
+        S_aw = (w_plus_full.where(mask4d) * (float(dx) * float(dy)) * dt).sum(dim=('y','x','time'))  # [z] m^3
+    else:
+        # fallback using per-level aggregates; prefer mass-flux-based approximation
+        # S_aw ~ (sum over time of M_plus * dt) / rho0(z)
+        Mp = xr.where(M > 0.0, M, 0.0)
+        rho0_z = None
+        if rho0 is not None:
+            if 'z' not in rho0.dims:
+                rho0 = rho0.rename({rho0.dims[0]: 'z'})
+            rho0_z = xr.DataArray(np.asarray(rho0.values, dtype=float), coords=dict(z=z.values), dims=('z',))
+        if rho0_z is None:
+            raise ValueError("fallback S_aw requires rho0. Provide rho0 or 4-D mask and w in the input dataset.")
+        S_aw = (Mp * dt).sum(dim='time') / rho0_z
 
     # Lifetime in seconds
     T_c = float(nt * dt)
@@ -107,7 +153,7 @@ def reduce_track(ds: xr.Dataset, track_index: int, dt: float,
     # Time‑integrated mass flux using instantaneous rho (from M per level)
     J_rho = (Mp * dt).sum(dim='time')                                      # [z] kg
 
-    # If a reference density profile is given, also compute J = ρ0 S_aw
+    # If a reference density profile is given, also compute J = rho0 * S_aw
     data_vars = dict(S_a=S_a, S_aw=S_aw, tilde_a=tilde_a, tilde_w_a=tilde_w_a,
                      J_rho=J_rho)
     if rho0 is not None:
