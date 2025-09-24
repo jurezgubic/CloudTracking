@@ -115,13 +115,13 @@ def main(args: argparse.Namespace) -> None:
         return
     print(f"[run] reduced clouds: {len(red)} in {time.time()-t_red:.1f}s", flush=True)
 
-    # Train/test split: first N-args.test_last for training, last for testing
+    # Train/validate split: 90% train, 10% validate (keeping it simple)
     n = len(red)
-    n_test = min(args.test_last, n//5 if n >= 5 else 1)
+    n_test = max(1, int(round(0.10 * n)))
     n_train = max(1, n - n_test)
     train = red[:n_train]
     test = red[n_train:]
-    print(f"[run] clouds: total={n}, train={len(train)}, test={len(test)}", flush=True)
+    print(f"[run] clouds: total={n}, train={len(train)} (90%), test={len(test)} (10%)", flush=True)
 
     # Fit c(z)
     print("[run] fitting c(z) ...", flush=True)
