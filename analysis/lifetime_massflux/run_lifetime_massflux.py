@@ -193,7 +193,7 @@ def main(args: argparse.Namespace) -> None:
 
 if __name__ == '__main__':
     p = argparse.ArgumentParser(description='Lifetime mass-flux analysis on cloud_results.nc')
-    p.add_argument('--nc', default='../../cloud_results_0.000001_30min.nc', help='Path to cloud_results.nc')
+    p.add_argument('--nc', default='../../cloud_results.nc', help='Path to cloud_results.nc')
     p.add_argument('--dt', type=float, default=60.0, help='Timestep duration in seconds')
     p.add_argument('--rho0', default='raw', choices=['raw','env','var'], help='Reference density source')
     p.add_argument('--raw_base', default='/Users/jure/PhD/coding/RICO_1hr/', help='Base path to raw LES files for --rho0 raw')

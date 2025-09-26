@@ -28,13 +28,13 @@ file_name = {
 }
 
 # Processing Options
-total_timesteps = 6 # Number of timesteps to process
+total_timesteps = 40 # Number of timesteps to process
 
 # Cloud Definition and Tracking Configuration
 config = {
     # Cloud identification
-    'min_size': 50,              # Minimum number of points for a cloud to be considered a cloud
-    'l_condition': 0.000001,      # kg/kg. Minimum liquid water content for a point to be a cloud.
+    'min_size': 10,              # Minimum number of points for a cloud to be considered a cloud
+    'l_condition': 0.00001,      # kg/kg. Minimum liquid water content for a point to be a cloud.
     'w_condition': 0.0,          # m/s. Minimum vertical velocity for a point to be part of a cloud.
     'w_switch': False,           # If True, apply the 'w_condition' threshold.
     
@@ -49,10 +49,10 @@ config = {
 
     # Matching parameters
     'distance_threshold': 0,     # Max distance between merging clouds across a periodic boundary.
-    'min_h_match_factor': 2.0,   # Minimum horizontal match factor. Min distance =  'min_h_match_factor' * 'horizontal_resolution'
-    'min_v_match_factor': 2.0,   # Minimum vertical match factor. Min distance =  'min_v_match_factor' * 'horizontal_resolution'
+    'min_h_match_factor': 2.5,   # Minimum horizontal match factor. Min distance =  'min_h_match_factor' * 'horizontal_resolution'
+    'min_v_match_factor': 2.5,   # Minimum vertical match factor. Min distance =  'min_v_match_factor' * 'horizontal_resolution'
     'match_safety_factor_dynamic': 2.0,  # Dynamic safety factor for matching clouds based on velocities. 
-    'bounding_box_safety_factor': 1.5, # Safety factor for pre-filtering potential matches (using centroids).
+    'bounding_box_safety_factor': 1.2, # Safety factor for pre-filtering potential matches (using centroids).
     'max_expected_cloud_speed': 15.0,  # m/s. An estimate to constrain the search space for matching.
     'use_pre_filtering': True,   # If True, use a pre-filtering step to find potential matches (speed up matching).
     'switch_prefilter_fallback': False, # If True: when no pre-filter candidates are found fallback to full-domain search.
@@ -68,15 +68,15 @@ config = {
 
     # NIP (Neighbour Interaction Potential) parameters
     'nip_gamma': 0.3,           # Kinematic boost coefficient
-    'nip_f': 10.0,               # Radius multiplier for neighbour search per level
+    'nip_f': 3.0,               # Radius multiplier for neighbour search per level
     'nip_Lh_min': 100.0,        # Min horizontal scale Lh [m]
-    'nip_Lh_max': 5000.0,       # Max horizontal scale Lh [m]
+    'nip_Lh_max': 2000.0,       # Max horizontal scale Lh [m]
     'nip_T_min': 60.0,          # Min temporal memory scale [s]
-    'nip_T_max': 1800.0,        # Max temporal memory scale [s]
+    'nip_T_max': 6000.0,        # Max temporal memory scale [s]
 
     # Environment ring (per-cloud surroundings) parameters
     'env_ring_max_distance': 3,   # Max Manhattan ring distance D around cloud edge (2D)
-    'env_periodic_rings': False,   # Respect periodic boundaries when forming rings
+    'env_periodic_rings': True,   # Respect periodic boundaries when forming rings
 }
 # --- End of user modifiable parameters ---
 
