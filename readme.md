@@ -6,15 +6,15 @@ This project provides Python code designed for the processing, tracking, and ana
 Currently configured for the [RICO case](https://doi.org/10.1175/BAMS-88-12-1912). Setups for LBA and RCE setups will be added soon. 
 
 ## About the code
-The code tracks and analyses cloud data, including cloud volume, surface area, time, location, maximum height, cloud base size, near environment of each cloud and (see [src/netcdf_writer.py](src/netcdf_writer.py) for all). It's designed to account for wind drift between time steps and works specifically for a biperiodic domains. The code currently allows for user choice of cloud identification thresholds, including liquid water, vertical velocity, and cloud size (currently). Some features and internal workings:
-- Overlap & mathing. Drifts the cloud's surface (optionally with multiple inside shells) from timestep *T-1* by the cloud’s mean velocity. Uses that to check overlap with a KD-tree of current timestep. Requires minimum number of overlap points.
-  - Prefilter. Before overlap, reduce number of candidates by centroid min distance search radius based on max speed (configurable) Optional full-domain search if no candidates.
+The code tracks and analyses cloud data, including cloud volume, surface area, cloud base size, near environment of each cloud and many others (see [src/netcdf_writer.py](src/netcdf_writer.py) for all). It accounts for wind drift between time steps and works for biperiodic domains. It allows for user choice of cloud identification thresholds. Some features and internal workings:
+- Overlap & matching. Drifts the cloud's surface (optionally with multiple inside shells) from last timestep to current timestep by the cloud’s mean velocity. Uses that to check overlap with a KD-tree of current timestep. Requires minimum number of overlap points.
+  - Prefilter. Before overlap, reduces the number of candidates by min distance search radius based on max speed (configurable). Optional full-domain search if no candidates.
 - Merges & Splits.
-  - Merges. Oldest parent continues and the child takes the age of parent. Others go inactive and set off merged_with flag.
-  - Splits. One child continues, others start new tracks with age = parent + 1 and set off split_from flag. 
-- Tainting (removing capture of partial lifetimes). Any cloud present at t=0 is tainted. Anything then merging into a tainted cloud becomes tainted. Any cloud still-active at final step is also tainted. Set by a valid_track flag. 
+  - Merges. Oldest parent continues; the child takes the age of parent. Others go inactive with merged_with flag.
+  - Splits. One child continues, others start new tracks with age = parent + 1 and have split_from flag. 
+- Tainting (removal of partial lifetimes). Any cloud present at t=0 is tainted. Anything then merging into a tainted cloud becomes tainted. Any cloud still-active at final step is also tainted. Set by a valid_track flag. 
 - Biperiodicity. When identifying clouds, the code merges labels on opposite edges if edge points are within a threshold (configurable) in order to prevent artificial splits across boundaries. 
-- Near-environment rings. For each cloud and each level, tracks Manhattan rings (1..N). Stores mean fields per ring. 
+- Near-environment rings. For each cloud and each level, tracks Manhattan distance rings and stores mean fields. 
 - Config. Key user inputs: thresholds, grid/time scales, knobs for matching (min overlaps, shells, safety), prefilter switched, base diagnostics, environment-ring settings.
 
 
@@ -51,7 +51,7 @@ pip install -r requirements.txt
 ## Plotting & Visualisation
 All tools use the NetCDF produced by `main.py` (`cloud_results.nc`). Most scripts assume the file is in the repo root and unfortunately a few use relative defaults like `../cloud_results.nc`. Run them as they are from `analysis` or pass `--nc` explicitly. By default, partial (tainted) tracks (`valid_track=0`) are excluded in most.
 
-![Cloud base detachment evolution](analysis/detaching_cloud_visualizations/cloud_251_detachment_evolution.gif)
+![Cloud base detachment evolution](analysis/analysis_output/cloud_268_detachment_evolution.gif)
 Lifecycle of a cloud that detaches from cloud base. Tracked through time with view drifting with prevailing winds. 
 
 ### Scripts
@@ -82,10 +82,3 @@ Many other notebooks exists, none of which have been tidied up yet. Some are lis
 - [Output Analysis — Environment](analysis/output_analysis_environment.ipynb)
 - [Output Analysis — Mass Flux](analysis/output_analysis_mass_flux.ipynb)
 - [Output Analysis — Cloud Base](analysis/output_analysis_cloudbase.ipynb)
-
-
-
-### 8. Performance Notes
-- Global KD-tree of surface points built in `CloudField.build_global_surface_kdtree()` accelerates overlap queries.
-- Centroid pre-filtering (`pre_filter_cloud_matches`) reduces expensive surface overlap checks; can disable with config flag `use_pre_filtering=False`.
-- When pre-filtering is enabled, you can control the fallback to a full-domain search if no match candidates are found with `switch_prefilter_fallback` (default `True`). Set `switch_prefilter_fallback=False` to skip the fallback to all and move on. Saves some time.
