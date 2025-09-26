@@ -26,6 +26,8 @@ figs_notebook/
 
 # gifs
 *.gif
+# except this one
+!analysis/analysis_output/cloud_268_detachment_evolution.gif
 
 # IDEs
 .vscode/
