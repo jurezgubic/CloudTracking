@@ -14,23 +14,22 @@ def visualize_points(last_cloud_points, expected_last_cloud_points, current_clou
         Primary use in cloudtracker.py in is_match functions.
         Produces an interactive 3D plot using matplotlib - mid simulation!
     """
-    fi
     fig = plt.figure()
     ax = fig.add_subplot(111, projection='3d')
 
     # Plot last cloud points
-    if last_cloud_points:
-        lx, ly, lz = zip(*last_cloud_points)
+    if last_cloud_points is not None and last_cloud_points.size > 0:
+        lx, ly, lz = last_cloud_points[:, 0], last_cloud_points[:, 1], last_cloud_points[:, 2]
         ax.scatter(lx, ly, lz, color='r', label='Last Cloud Points')
 
     # Plot expected positions after drift
-    if expected_last_cloud_points:
-        ex, ey, ez = zip(*expected_last_cloud_points)
+    if expected_last_cloud_points is not None and expected_last_cloud_points.size > 0:
+        ex, ey, ez = expected_last_cloud_points[:, 0], expected_last_cloud_points[:, 1], expected_last_cloud_points[:, 2]
         ax.scatter(ex, ey, ez, color='g', alpha=0.5, label='Expected Points Post-Drift')
 
     # Plot current cloud points
-    if current_cloud_points:
-        cx, cy, cz = zip(*current_cloud_points)
+    if current_cloud_points is not None and current_cloud_points.size > 0:
+        cx, cy, cz = current_cloud_points[:, 0], current_cloud_points[:, 1], current_cloud_points[:, 2]
         ax.scatter(cx, cy, cz, color='b', alpha=0.5, label='Current Cloud Points')
 
     ax.legend()
@@ -52,22 +51,22 @@ def visualize_points_plotly(last_cloud_points, expected_last_cloud_points, curre
     fig = go.Figure()
 
     # Add last cloud points
-    if last_cloud_points:
-        lx, ly, lz = zip(*last_cloud_points)
+    if last_cloud_points is not None and last_cloud_points.size > 0:
+        lx, ly, lz = last_cloud_points[:, 0], last_cloud_points[:, 1], last_cloud_points[:, 2]
         fig.add_trace(go.Scatter3d(
             x=lx, y=ly, z=lz, mode='markers', marker=dict(size=4, color='red'), 
             name='Last Cloud Points'))
 
     # Add expected points after drift
-    if expected_last_cloud_points:
-        ex, ey, ez = zip(*expected_last_cloud_points)
+    if expected_last_cloud_points is not None and expected_last_cloud_points.size > 0:
+        ex, ey, ez = expected_last_cloud_points[:, 0], expected_last_cloud_points[:, 1], expected_last_cloud_points[:, 2]
         fig.add_trace(go.Scatter3d(
             x=ex, y=ey, z=ez, mode='markers', marker=dict(size=4, color='green', opacity=0.5),
             name='Expected Points Post-Drift'))
 
     # Add current cloud points
-    if current_cloud_points:
-        cx, cy, cz = zip(*current_cloud_points)
+    if current_cloud_points is not None and current_cloud_points.size > 0:
+        cx, cy, cz = current_cloud_points[:, 0], current_cloud_points[:, 1], current_cloud_points[:, 2]
         fig.add_trace(go.Scatter3d(
             x=cx, y=cy, z=cz, mode='markers', marker=dict(size=4, color='blue', opacity=0.5), 
             name='Current Cloud Points'))

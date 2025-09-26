@@ -6,6 +6,32 @@ __pycache__/
 # netcdf files
 *.nc
 
+# Github copilot instructions
+.github/
+
+# All analysis results
+analysis_output/
+cloud_surface_visualizations/
+figs_notebook/
+
+
+# Any animations (mp4)
+*.mp4
+
+# pdf files
+*.pdf
+
+# png files
+*.png
+
+# gifs
+*.gif
+# except this one
+!analysis/analysis_output/cloud_268_detachment_evolution.gif
+
+# IDEs
+.vscode/
+
 # macOS
 .DS_Store
 
@@ -132,6 +158,7 @@ venv/
 ENV/
 env.bak/
 venv.bak/
+ct_venv/
 
 # Spyder project settings
 .spyderproject
