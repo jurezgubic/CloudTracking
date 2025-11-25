@@ -28,13 +28,13 @@ file_name = {
 }
 
 # Processing Options
-total_timesteps = 3 # Number of timesteps to process
+total_timesteps = 10 # Number of timesteps to process
 
 # Cloud Definition and Tracking Configuration
 config = {
     # Cloud identification
     'min_size': 10,              # Minimum number of points for a cloud to be considered a cloud
-    'l_condition': 0.001,      # kg/kg. Minimum liquid water content for a point to be a cloud.
+    'l_condition': 0.00001,      # kg/kg. Minimum liquid water content for a point to be a cloud.
     'w_condition': 0.0,          # m/s. Minimum vertical velocity for a point to be part of a cloud.
     'w_switch': False,           # If True, apply the 'w_condition' threshold.
     
