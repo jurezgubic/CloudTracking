@@ -6,7 +6,7 @@ def initialize_netcdf(file_path, zt, ring_count):
     """Create a new NetCDF file with necessary dimensions and variables for cloud tracking data."""
     # Create the file and define dimensions and variables
     with Dataset(file_path, 'w', format='NETCDF4') as root_grp:
-        root_grp.createDimension('track', 100000)  # Fixed large number of tracks
+        root_grp.createDimension('track', 1000)  # Fixed large number of tracks
         root_grp.createDimension('time', None)  # Unlimited time dimension
         #root_grp.createDimension('point', 100000)  # Static dimension for cloud points Warning: Not in use, crude test remnant!
         root_grp.createDimension('coordinate', 3)  # Static dimension for 3D coordinates
@@ -233,42 +233,6 @@ def write_cloud_tracks_to_netcdf(tracks, track_id_to_index, tainted_tracks, env_
                         else:
                             merged_into_var[i, timestep - 1] = -2  # Unknown target
 
-                # Set current and future entries to NaN for inactive clouds
-                size_var[i, timestep:] = np.nan
-                max_height_var[i, timestep:] = np.nan
-                max_w_var[i, timestep:] = np.nan
-                max_w_cloud_base_var[i, timestep:] = np.nan
-                ql_flux_var[i, timestep:] = np.nan
-                mass_flux_var[i, timestep:] = np.nan
-                mass_flux_per_level_var[i, timestep:, :] = np.nan
-                temp_per_level_var[i, timestep:, :] = np.nan
-                theta_outside_per_level_var[i, timestep:, :] = np.nan
-                w_per_level_var[i, timestep:, :] = np.nan
-                circum_per_level_var[i, timestep:, :] = np.nan
-                eff_radius_per_level_var[i, timestep:, :] = np.nan
-                root_grp.variables['nip_per_level'][i, timestep:, :] = np.nan
-                root_grp.variables['nip_acc_per_level'][i, timestep:, :] = np.nan
-                cloud_base_area_var[i, timestep:] = np.nan
-                surface_area_var[i, timestep:] = np.nan
-                loc_x_var[i, timestep:] = np.nan
-                loc_y_var[i, timestep:] = np.nan
-                loc_z_var[i, timestep:] = np.nan
-                #cloud_points_var[i, timestep:, :, :] = np.nan
-                age_var[i, timestep:] = -1
-                merged_into_var[i, timestep] = -1  # not merged at this (empty) time
-                area_per_level_var[i, timestep:, :] = np.nan
-                equiv_radius_per_level_var[i, timestep:, :] = np.nan
-                compactness_per_level_var[i, timestep:, :] = np.nan
-                base_radius_prescribed_var[i, timestep:] = np.nan
-                base_radius_diagnosed_var[i, timestep:] = np.nan
-                base_area_diagnosed_var[i, timestep:] = np.nan
-                max_equiv_radius_var[i, timestep:] = np.nan
-
-                # Clear ring arrays for inactive entries
-                env_w_rings_var[i, timestep:, :, :] = np.nan
-                env_l_rings_var[i, timestep:, :, :] = np.nan
-                env_qt_rings_var[i, timestep:, :, :] = np.nan
-                env_qv_rings_var[i, timestep:, :, :] = np.nan
-                env_p_rings_var[i, timestep:, :, :] = np.nan
-                env_theta_l_rings_var[i, timestep:, :, :] = np.nan
-                env_buoyancy_rings_var[i, timestep:, :, :] = np.nan
+                # Optimization: Do not write NaNs for inactive tracks.
+                # The file is initialized with fill_value=NaN (or -1), so we don't need to explicitly write them.
+                pass

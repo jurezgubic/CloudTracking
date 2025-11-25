@@ -34,7 +34,7 @@ total_timesteps = 3 # Number of timesteps to process
 config = {
     # Cloud identification
     'min_size': 10,              # Minimum number of points for a cloud to be considered a cloud
-    'l_condition': 0.01,      # kg/kg. Minimum liquid water content for a point to be a cloud.
+    'l_condition': 0.001,      # kg/kg. Minimum liquid water content for a point to be a cloud.
     'w_condition': 0.0,          # m/s. Minimum vertical velocity for a point to be part of a cloud.
     'w_switch': False,           # If True, apply the 'w_condition' threshold.
     
@@ -148,10 +148,11 @@ def process_clouds(cloud_tracker):
                 if track_id in cloud_tracker.tainted_tracks:
                     continue
                     
-                for cloud in track:
-                    if hasattr(cloud, 'merged_into') and cloud.merged_into in cloud_tracker.tainted_tracks:
+                # Optimization: Only check the last cloud, as merged_into is set when a track ends
+                if track:
+                    last_cloud = track[-1]
+                    if hasattr(last_cloud, 'merged_into') and last_cloud.merged_into in cloud_tracker.tainted_tracks:
                         newly_tainted.append(track_id)
-                        break
             
             # Mark as tainted instead of deleting
             cloud_tracker.tainted_tracks.update(newly_tainted)
@@ -166,8 +167,10 @@ def process_clouds(cloud_tracker):
                 for trackid, clouds in tracks.items():
                     if trackid not in tainted_ids:
                         continue
-                    for cloud in clouds:
-                        target = getattr(cloud, 'merged_into', None)
+                    # Optimization: Only check the last cloud
+                    if clouds:
+                        last_cloud = clouds[-1]
+                        target = getattr(last_cloud, 'merged_into', None)
                         if target is not None:
                             recipients.add(target)
                 return recipients
