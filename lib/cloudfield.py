@@ -514,6 +514,11 @@ class CloudField:
                         thetal_vals = theta_l_data[z_sel, y_sel, x_sel]
                         p_vals = p_data[z_sel, y_sel, x_sel]
                         
+                        # Convert masked arrays to numpy arrays with NaNs for Numba compatibility
+                        qt_vals = np.ma.filled(qt_vals, np.nan)
+                        thetal_vals = np.ma.filled(thetal_vals, np.nan)
+                        p_vals = np.ma.filled(p_vals, np.nan)
+                        
                         # 1. Anomalies
                         mean_qt_vals = self.mean_qt_profile[z_sel] / 1000.0
                         mean_thetal_vals = self.mean_theta_l_profile[z_sel]

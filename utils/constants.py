@@ -8,6 +8,7 @@ c_pv = 1996.0  # J/kg/K specific heat capacity of water vapour
 L_v = 2268000.0  # J/kg latent heat of vaporisation
 p_0 = 100000.0  # Pa standard pressure at sea level
 rho_l = 1000.0  # kg/m^3 density of water
+g = 9.81  # m/s^2 acceleration due to gravity
 
 
 # Composite constants
