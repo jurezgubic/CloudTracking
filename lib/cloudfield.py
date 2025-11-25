@@ -5,8 +5,9 @@ from memory_profiler import profile
 from scipy.ndimage import binary_dilation, binary_erosion, generate_binary_structure
 from utils.plotting_utils import plot_labeled_regions
 from lib.cloud import Cloud
-from utils.physics import calculate_physics_variables
+from utils.physics import calculate_physics_variables, calculate_rh_and_temperature
 from scipy.spatial import cKDTree
+import utils.constants as const
 
 class CloudField:
     """Class to identify and track clouds in a labeled data field."""
@@ -35,6 +36,10 @@ class CloudField:
         self.env_mass_flux_per_level = self._calculate_environment_mass_flux(
             updated_labeled_array, p_data, theta_l_data, l_data, q_t_data, w_data, config
         )
+
+        # Calculate domain mean profiles for environment aloft analysis
+        self.mean_theta_l_profile = np.mean(theta_l_data, axis=(1, 2))
+        self.mean_qt_profile = np.mean(q_t_data, axis=(1, 2))
 
         # create cloud data from updated labeled array
         self.clouds = self.create_clouds_from_labeled_array(
@@ -456,6 +461,109 @@ class CloudField:
                     # Physical centroid in (x,y,z)
                     phys_centroid = points.mean(axis=0)
 
+                    # --- Environment Aloft Analysis ---
+                    # Analyze environment above the cloud top
+                    n_aloft_levels = int(config.get('env_aloft_levels', 40))
+                    
+                    # Initialize arrays for profiles
+                    env_aloft_qt_diff = np.full(n_aloft_levels, np.nan)
+                    env_aloft_thetal_diff = np.full(n_aloft_levels, np.nan)
+                    env_aloft_shear = np.full(n_aloft_levels, np.nan)
+                    env_aloft_n2 = np.full(n_aloft_levels, np.nan)
+                    env_aloft_rh = np.full(n_aloft_levels, np.nan)
+                    
+                    # Find cloud top for each column using region.image (efficiently)
+                    # region.image is (Z, Y, X) boolean mask in the bounding box
+                    # We want max Z for each (Y, X) where cloud is present
+                    # Create an array of Z indices matching the image shape
+                    z_indices_local = np.arange(region.image.shape[0]).reshape(-1, 1, 1)
+                    # Mask where cloud is not present with -1
+                    masked_z = np.where(region.image, z_indices_local, -1)
+                    # Find max Z along axis 0 (vertical)
+                    top_z_local = np.max(masked_z, axis=0) # Shape (Y_box, X_box)
+                    
+                    # Filter valid columns (where top_z_local != -1)
+                    valid_mask = top_z_local != -1
+                    valid_ys, valid_xs = np.where(valid_mask)
+                    valid_z_locals = top_z_local[valid_ys, valid_xs]
+                    
+                    # Convert to absolute coordinates
+                    # region.bbox is (min_z, min_y, min_x, max_z, max_y, max_x)
+                    abs_z_tops = valid_z_locals + region.bbox[0]
+                    abs_ys = valid_ys + region.bbox[1]
+                    abs_xs = valid_xs + region.bbox[2]
+                    
+                    # Loop over levels aloft
+                    for k in range(n_aloft_levels):
+                        # Target z indices for all columns (k=0 is 1 level above top)
+                        target_zs = abs_z_tops + k + 1 
+                        
+                        # Filter out of bounds
+                        in_bounds = target_zs < n_levels
+                        if not np.any(in_bounds):
+                            continue
+                            
+                        # Select valid points
+                        z_sel = target_zs[in_bounds]
+                        y_sel = abs_ys[in_bounds]
+                        x_sel = abs_xs[in_bounds]
+                        
+                        # Extract data
+                        # q_t is in g/kg in data, convert to kg/kg
+                        qt_vals = q_t_data[z_sel, y_sel, x_sel] / 1000.0
+                        thetal_vals = theta_l_data[z_sel, y_sel, x_sel]
+                        p_vals = p_data[z_sel, y_sel, x_sel]
+                        
+                        # 1. Anomalies
+                        mean_qt_vals = self.mean_qt_profile[z_sel] / 1000.0
+                        mean_thetal_vals = self.mean_theta_l_profile[z_sel]
+                        
+                        env_aloft_qt_diff[k] = np.nanmean(qt_vals - mean_qt_vals)
+                        env_aloft_thetal_diff[k] = np.nanmean(thetal_vals - mean_thetal_vals)
+                        
+                        # 2. Shear
+                        # Need u, v at z+1 and z-1 (or z and z+1)
+                        # Check bounds for neighbors
+                        z_up = np.minimum(z_sel + 1, n_levels - 1)
+                        z_down = np.maximum(z_sel - 1, 0)
+                        dz_local = zt[z_up] - zt[z_down] # Array of dz
+                        
+                        # Avoid division by zero if z_up == z_down (single level domain?)
+                        # Should not happen if n_levels > 1
+                        
+                        u_up = u_data[z_up, y_sel, x_sel]
+                        u_down = u_data[z_down, y_sel, x_sel]
+                        v_up = v_data[z_up, y_sel, x_sel]
+                        v_down = v_data[z_down, y_sel, x_sel]
+                        
+                        du_dz = (u_up - u_down) / dz_local
+                        dv_dz = (v_up - v_down) / dz_local
+                        shear_vals = np.sqrt(du_dz**2 + dv_dz**2)
+                        env_aloft_shear[k] = np.nanmean(shear_vals)
+                        
+                        # 3. N^2
+                        # theta_v = theta_l * (1 + 0.61 * qt)
+                        
+                        tl_up = theta_l_data[z_up, y_sel, x_sel]
+                        qt_up = q_t_data[z_up, y_sel, x_sel] / 1000.0
+                        tv_up = tl_up * (1 + 0.61 * qt_up)
+                        
+                        tl_down = theta_l_data[z_down, y_sel, x_sel]
+                        qt_down = q_t_data[z_down, y_sel, x_sel] / 1000.0
+                        tv_down = tl_down * (1 + 0.61 * qt_down)
+                        
+                        tl_curr = thetal_vals
+                        qt_curr = qt_vals
+                        tv_curr = tl_curr * (1 + 0.61 * qt_curr)
+                        
+                        dtv_dz = (tv_up - tv_down) / dz_local
+                        n2_vals = (const.g / tv_curr) * dtv_dz
+                        env_aloft_n2[k] = np.nanmean(n2_vals)
+                        
+                        # 4. RH
+                        rh_vals, _ = calculate_rh_and_temperature(p_vals, thetal_vals, qt_vals)
+                        env_aloft_rh[k] = np.nanmean(rh_vals)
+
                     # Create a Cloud object and store it
                     clouds[cloud_id] = Cloud(
                         cloud_id=cloud_id,
@@ -489,7 +597,13 @@ class CloudField:
                         max_equiv_radius=max_equiv_radius,
                         # NIP kinematics per level
                         u_per_level=u_per_level,
-                        v_per_level=v_per_level
+                        v_per_level=v_per_level,
+                        # Environment Aloft
+                        env_aloft_qt_diff=env_aloft_qt_diff,
+                        env_aloft_thetal_diff=env_aloft_thetal_diff,
+                        env_aloft_shear=env_aloft_shear,
+                        env_aloft_n2=env_aloft_n2,
+                        env_aloft_rh=env_aloft_rh
                     )
 
                     # --- Environment ring averages (per level, per ring distance) ---

@@ -2,7 +2,7 @@ from netCDF4 import Dataset
 import numpy as np
 import os
 
-def initialize_netcdf(file_path, zt, ring_count):
+def initialize_netcdf(file_path, zt, ring_count, env_aloft_levels=40):
     """Create a new NetCDF file with necessary dimensions and variables for cloud tracking data."""
     # Create the file and define dimensions and variables
     with Dataset(file_path, 'w', format='NETCDF4') as root_grp:
@@ -12,6 +12,9 @@ def initialize_netcdf(file_path, zt, ring_count):
         root_grp.createDimension('coordinate', 3)  # Static dimension for 3D coordinates
         root_grp.createDimension('level', len(zt))  # Using consistent height levels
         root_grp.createDimension('ring', ring_count)  # Environment ring distance index (1..D)
+        
+        # Environment Aloft Dimension
+        root_grp.createDimension('height_aloft', env_aloft_levels)
 
         # Flag for whether a track is fully valid or not (0=partial, 1=complete)
         valid_track_var = root_grp.createVariable('valid_track', 'i4', ('track',))
@@ -74,13 +77,20 @@ def initialize_netcdf(file_path, zt, ring_count):
         root_grp.createVariable('env_theta_l_rings', 'f4', ('track','time','level','ring'), fill_value=np.nan)
         root_grp.createVariable('env_buoyancy_rings', 'f4', ('track','time','level','ring'), fill_value=np.nan)
 
+        # Environment Aloft variables (track, time, height_aloft)
+        root_grp.createVariable('env_aloft_qt_diff', 'f4', ('track', 'time', 'height_aloft'), fill_value=np.nan)
+        root_grp.createVariable('env_aloft_thetal_diff', 'f4', ('track', 'time', 'height_aloft'), fill_value=np.nan)
+        root_grp.createVariable('env_aloft_shear', 'f4', ('track', 'time', 'height_aloft'), fill_value=np.nan)
+        root_grp.createVariable('env_aloft_n2', 'f4', ('track', 'time', 'height_aloft'), fill_value=np.nan)
+        root_grp.createVariable('env_aloft_rh', 'f4', ('track', 'time', 'height_aloft'), fill_value=np.nan)
 
-def write_cloud_tracks_to_netcdf(tracks, track_id_to_index, tainted_tracks, env_mass_flux_per_level, file_path, timestep, zt, ring_count):
+
+def write_cloud_tracks_to_netcdf(tracks, track_id_to_index, tainted_tracks, env_mass_flux_per_level, file_path, timestep, zt, ring_count, env_aloft_levels=40):
     """Write cloud tracking data (including environment rings) to NetCDF for a timestep."""
 
     # Create the file if it doesn't exist
     if not os.path.exists(file_path):
-        initialize_netcdf(file_path, zt, ring_count)
+        initialize_netcdf(file_path, zt, ring_count, env_aloft_levels)
 
     # Write data for clouds at this timestep
     with Dataset(file_path, 'a') as root_grp:
@@ -207,6 +217,14 @@ def write_cloud_tracks_to_netcdf(tracks, track_id_to_index, tainted_tracks, env_
                     env_theta_l_rings_var[i, timestep, :, :] = cloud.env_theta_l_rings
                     env_buoyancy_rings_var[i, timestep, :, :] = cloud.env_buoyancy_rings
                 
+                # Write environment aloft arrays if present
+                if getattr(cloud, 'env_aloft_qt_diff', None) is not None:
+                    root_grp.variables['env_aloft_qt_diff'][i, timestep, :] = cloud.env_aloft_qt_diff
+                    root_grp.variables['env_aloft_thetal_diff'][i, timestep, :] = cloud.env_aloft_thetal_diff
+                    root_grp.variables['env_aloft_shear'][i, timestep, :] = cloud.env_aloft_shear
+                    root_grp.variables['env_aloft_n2'][i, timestep, :] = cloud.env_aloft_n2
+                    root_grp.variables['env_aloft_rh'][i, timestep, :] = cloud.env_aloft_rh
+
                 # Write split_from information if available
                 if hasattr(cloud, 'split_from') and cloud.split_from is not None:
                     # Convert track ID to index

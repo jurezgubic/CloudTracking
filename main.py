@@ -77,6 +77,9 @@ config = {
     # Environment ring (per-cloud surroundings) parameters
     'env_ring_max_distance': 3,   # Max Manhattan ring distance D around cloud edge (2D)
     'env_periodic_rings': True,   # Respect periodic boundaries when forming rings
+
+    # Environment aloft parameters
+    'env_aloft_levels': 40,       # Number of levels above cloud top to analyze (integer)
 }
 # --- End of user modifiable parameters ---
 

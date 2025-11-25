@@ -37,7 +37,13 @@ class Cloud:
                  compactness_per_level=None,
                  base_radius_diagnosed=None,
                  base_area_diagnosed=None,
-                 max_equiv_radius=None):
+                 max_equiv_radius=None,
+                 # Environment Aloft
+                 env_aloft_qt_diff=None,
+                 env_aloft_thetal_diff=None,
+                 env_aloft_shear=None,
+                 env_aloft_n2=None,
+                 env_aloft_rh=None):
         """ Initialize the cloud object """
         self.cloud_id = cloud_id
         self.size = size
@@ -84,6 +90,13 @@ class Cloud:
         self.base_radius_diagnosed = base_radius_diagnosed
         self.base_area_diagnosed = base_area_diagnosed
         self.max_equiv_radius = max_equiv_radius
+
+        # Environment Aloft
+        self.env_aloft_qt_diff = env_aloft_qt_diff
+        self.env_aloft_thetal_diff = env_aloft_thetal_diff
+        self.env_aloft_shear = env_aloft_shear
+        self.env_aloft_n2 = env_aloft_n2
+        self.env_aloft_rh = env_aloft_rh
 
         # Environment rings (per level x ring distance)
         # Averages over environment points at Manhattan distance d=1..D from cloud edge
