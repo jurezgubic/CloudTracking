@@ -566,7 +566,7 @@ class CloudField:
                         env_aloft_n2[k] = np.nanmean(n2_vals)
                         
                         # 4. RH
-                        rh_vals, _ = calculate_rh_and_temperature(p_vals, thetal_vals, qt_vals)
+                        _, rh_vals = calculate_rh_and_temperature(p_vals, thetal_vals, qt_vals)
                         env_aloft_rh[k] = np.nanmean(rh_vals)
 
                     # Create a Cloud object and store it
