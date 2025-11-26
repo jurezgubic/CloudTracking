@@ -56,7 +56,7 @@ config = {
     'max_expected_cloud_speed': 15.0,  # m/s. An estimate to constrain the search space for matching.
     'use_pre_filtering': True,   # If True, use a pre-filtering step to find potential matches (speed up matching).
     'switch_prefilter_fallback': False, # If True: when no pre-filter candidates are found fallback to full-domain search.
-    'min_surface_overlap_points': 10,  # Require at least this many overlapping surface points for a match
+    'min_surface_overlap_points': 1,  # Require at least this many overlapping surface points for a match
     'match_shell_layers': 3,       # Number of cloud shell layers to include for matching (1 = surface points only)
 
     # Visualisation (somewhat deprecated)
@@ -75,11 +75,11 @@ config = {
     'nip_T_max': 6000.0,        # Max temporal memory scale [s]
 
     # Environment ring (per-cloud surroundings) parameters
-    'env_ring_max_distance': 3,   # Max Manhattan ring distance D around cloud edge (2D)
+    'env_ring_max_distance': 1,   # Max Manhattan ring distance D around cloud edge (2D)
     'env_periodic_rings': True,   # Respect periodic boundaries when forming rings
 
     # Environment aloft parameters
-    'env_aloft_levels': 40,       # Number of levels above cloud top to analyze (integer)
+    'env_aloft_levels': 40,       # Number of levels above cloud top to analyze
 }
 # --- End of user modifiable parameters ---
 
