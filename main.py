@@ -28,7 +28,7 @@ file_name = {
 }
 
 # Processing Options
-total_timesteps = 30 # Number of timesteps to process
+total_timesteps = 10 # Number of timesteps to process
 
 # Cloud Definition and Tracking Configuration
 config = {

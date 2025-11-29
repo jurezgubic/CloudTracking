@@ -93,8 +93,8 @@ class CloudField:
         w_values_env = w_data[env_mask]
 
         # Convert units for physics calculation
-        q_l_values_env = l_values_env / 1000.0
-        q_t_values_env_kg = q_t_values_env / 1000.0
+        q_l_values_env = l_values_env
+        q_t_values_env_kg = q_t_values_env
         q_v_values_env = q_t_values_env_kg - q_l_values_env
 
         # Convert any masked arrays to regular arrays (needed for Numba)
@@ -321,8 +321,8 @@ class CloudField:
                     l_values = l_data[point_indices[:, 0], point_indices[:, 1], point_indices[:, 2]]
                     p_values = p_data[point_indices[:, 0], point_indices[:, 1], point_indices[:, 2]]
                     theta_l_values = theta_l_data[point_indices[:, 0], point_indices[:, 1], point_indices[:, 2]]
-                    q_t_values = q_t_data[point_indices[:, 0], point_indices[:, 1], point_indices[:, 2]] / 1000  # g/kg to kg/kg
-                    q_l_values = l_values / 1000  # g/kg to kg/kg
+                    q_t_values = q_t_data[point_indices[:, 0], point_indices[:, 1], point_indices[:, 2]]
+                    q_l_values = l_values
                     q_v_values = q_t_values - q_l_values
 
                     # Convert any masked arrays to regular arrays (needed for Numba)
@@ -509,8 +509,8 @@ class CloudField:
                         x_sel = abs_xs[in_bounds]
                         
                         # Extract data
-                        # q_t is in g/kg in data, convert to kg/kg
-                        qt_vals = q_t_data[z_sel, y_sel, x_sel] / 1000.0
+                        # q_t is in kg/kg in data
+                        qt_vals = q_t_data[z_sel, y_sel, x_sel]
                         thetal_vals = theta_l_data[z_sel, y_sel, x_sel]
                         p_vals = p_data[z_sel, y_sel, x_sel]
                         
@@ -520,7 +520,7 @@ class CloudField:
                         p_vals = np.ma.filled(p_vals, np.nan)
                         
                         # 1. Anomalies
-                        mean_qt_vals = self.mean_qt_profile[z_sel] / 1000.0
+                        mean_qt_vals = self.mean_qt_profile[z_sel]
                         mean_thetal_vals = self.mean_theta_l_profile[z_sel]
                         
                         env_aloft_qt_diff[k] = np.nanmean(qt_vals - mean_qt_vals)
@@ -550,11 +550,11 @@ class CloudField:
                         # theta_v = theta_l * (1 + 0.61 * qt)
                         
                         tl_up = theta_l_data[z_up, y_sel, x_sel]
-                        qt_up = q_t_data[z_up, y_sel, x_sel] / 1000.0
+                        qt_up = q_t_data[z_up, y_sel, x_sel]
                         tv_up = tl_up * (1 + 0.61 * qt_up)
                         
                         tl_down = theta_l_data[z_down, y_sel, x_sel]
-                        qt_down = q_t_data[z_down, y_sel, x_sel] / 1000.0
+                        qt_down = q_t_data[z_down, y_sel, x_sel]
                         tv_down = tl_down * (1 + 0.61 * qt_down)
                         
                         tl_curr = thetal_vals
@@ -685,8 +685,8 @@ class CloudField:
 
                                 # Buoyancy: compute densities for ring points and reference to env mean rho at this level
                                 # Convert to kg/kg for physics
-                                ql_ring = l_z[ring_env] / 1000.0
-                                qt_ring = qt_z[ring_env] / 1000.0
+                                ql_ring = l_z[ring_env]
+                                qt_ring = qt_z[ring_env]
                                 qv_ring = qt_ring - ql_ring
                                 p_ring = p_z[ring_env]
                                 t_ring = t_z[ring_env]
