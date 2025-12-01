@@ -464,6 +464,8 @@ class CloudField:
                     # --- Environment Aloft Analysis ---
                     # Analyze environment above the cloud top
                     n_aloft_levels = int(config.get('env_aloft_levels', 40))
+                    if n_aloft_levels == -1:
+                        n_aloft_levels = n_levels
                     
                     # Initialize arrays for profiles
                     env_aloft_qt_diff = np.full(n_aloft_levels, np.nan)
@@ -471,6 +473,13 @@ class CloudField:
                     env_aloft_shear = np.full(n_aloft_levels, np.nan)
                     env_aloft_n2 = np.full(n_aloft_levels, np.nan)
                     env_aloft_rh = np.full(n_aloft_levels, np.nan)
+
+                    # Initialize arrays for variability (std)
+                    env_aloft_qt_std = np.full(n_aloft_levels, np.nan)
+                    env_aloft_thetal_std = np.full(n_aloft_levels, np.nan)
+                    env_aloft_shear_std = np.full(n_aloft_levels, np.nan)
+                    env_aloft_n2_std = np.full(n_aloft_levels, np.nan)
+                    env_aloft_rh_std = np.full(n_aloft_levels, np.nan)
                     
                     # Find cloud top for each column using region.image (efficiently)
                     # region.image is (Z, Y, X) boolean mask in the bounding box
@@ -524,7 +533,9 @@ class CloudField:
                         mean_thetal_vals = self.mean_theta_l_profile[z_sel]
                         
                         env_aloft_qt_diff[k] = np.nanmean(qt_vals - mean_qt_vals)
+                        env_aloft_qt_std[k] = np.nanstd(qt_vals)
                         env_aloft_thetal_diff[k] = np.nanmean(thetal_vals - mean_thetal_vals)
+                        env_aloft_thetal_std[k] = np.nanstd(thetal_vals)
                         
                         # 2. Shear
                         # Need u, v at z+1 and z-1 (or z and z+1)
@@ -545,6 +556,7 @@ class CloudField:
                         dv_dz = (v_up - v_down) / dz_local
                         shear_vals = np.sqrt(du_dz**2 + dv_dz**2)
                         env_aloft_shear[k] = np.nanmean(shear_vals)
+                        env_aloft_shear_std[k] = np.nanstd(shear_vals)
                         
                         # 3. N^2
                         # theta_v = theta_l * (1 + 0.61 * qt)
@@ -564,10 +576,12 @@ class CloudField:
                         dtv_dz = (tv_up - tv_down) / dz_local
                         n2_vals = (const.g / tv_curr) * dtv_dz
                         env_aloft_n2[k] = np.nanmean(n2_vals)
+                        env_aloft_n2_std[k] = np.nanstd(n2_vals)
                         
                         # 4. RH
                         _, rh_vals = calculate_rh_and_temperature(p_vals, thetal_vals, qt_vals)
                         env_aloft_rh[k] = np.nanmean(rh_vals)
+                        env_aloft_rh_std[k] = np.nanstd(rh_vals)
 
                     # Create a Cloud object and store it
                     clouds[cloud_id] = Cloud(
@@ -608,7 +622,12 @@ class CloudField:
                         env_aloft_thetal_diff=env_aloft_thetal_diff,
                         env_aloft_shear=env_aloft_shear,
                         env_aloft_n2=env_aloft_n2,
-                        env_aloft_rh=env_aloft_rh
+                        env_aloft_rh=env_aloft_rh,
+                        env_aloft_qt_std=env_aloft_qt_std,
+                        env_aloft_thetal_std=env_aloft_thetal_std,
+                        env_aloft_shear_std=env_aloft_shear_std,
+                        env_aloft_n2_std=env_aloft_n2_std,
+                        env_aloft_rh_std=env_aloft_rh_std
                     )
 
                     # --- Environment ring averages (per level, per ring distance) ---

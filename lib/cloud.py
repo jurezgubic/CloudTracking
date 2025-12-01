@@ -43,7 +43,12 @@ class Cloud:
                  env_aloft_thetal_diff=None,
                  env_aloft_shear=None,
                  env_aloft_n2=None,
-                 env_aloft_rh=None):
+                 env_aloft_rh=None,
+                 env_aloft_qt_std=None,
+                 env_aloft_thetal_std=None,
+                 env_aloft_shear_std=None,
+                 env_aloft_n2_std=None,
+                 env_aloft_rh_std=None):
         """ Initialize the cloud object """
         self.cloud_id = cloud_id
         self.size = size
@@ -97,6 +102,11 @@ class Cloud:
         self.env_aloft_shear = env_aloft_shear
         self.env_aloft_n2 = env_aloft_n2
         self.env_aloft_rh = env_aloft_rh
+        self.env_aloft_qt_std = env_aloft_qt_std
+        self.env_aloft_thetal_std = env_aloft_thetal_std
+        self.env_aloft_shear_std = env_aloft_shear_std
+        self.env_aloft_n2_std = env_aloft_n2_std
+        self.env_aloft_rh_std = env_aloft_rh_std
 
         # Environment rings (per level x ring distance)
         # Averages over environment points at Manhattan distance d=1..D from cloud edge

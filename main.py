@@ -28,13 +28,13 @@ file_name = {
 }
 
 # Processing Options
-total_timesteps = 30 # Number of timesteps to process
+total_timesteps = 7 # Number of timesteps to process
 
 # Cloud Definition and Tracking Configuration
 config = {
     # Cloud identification
     'min_size': 10,              # Minimum number of points for a cloud to be considered a cloud
-    'l_condition': 0.00001,      # kg/kg. Minimum liquid water content for a point to be a cloud.
+    'l_condition': 0.001,      # kg/kg. Minimum liquid water content for a point to be a cloud.
     'w_condition': 0.0,          # m/s. Minimum vertical velocity for a point to be part of a cloud.
     'w_switch': False,           # If True, apply the 'w_condition' threshold.
     
@@ -79,7 +79,7 @@ config = {
     'env_periodic_rings': True,   # Respect periodic boundaries when forming rings
 
     # Environment aloft parameters
-    'env_aloft_levels': 40,       # Number of levels above cloud top to analyze
+    'env_aloft_levels': -1,       # Number of levels above cloud top to analyze. Set to -1 for all levels!
 }
 # --- End of user modifiable parameters ---
 
@@ -204,7 +204,8 @@ def process_clouds(cloud_tracker):
             output_netcdf_path, 
             timestep, 
             cloud_field.zt,
-            config.get('env_ring_max_distance', 3)
+            config.get('env_ring_max_distance', 3),
+            env_aloft_levels=config.get('env_aloft_levels', 40)
         )
 
         gc.collect()
@@ -237,7 +238,8 @@ def process_clouds(cloud_tracker):
         output_netcdf_path, 
         total_timesteps - 1, 
         cloud_field.zt,
-        config.get('env_ring_max_distance', 3)
+        config.get('env_ring_max_distance', 3),
+        env_aloft_levels=config.get('env_aloft_levels', 40)
     )
 
 

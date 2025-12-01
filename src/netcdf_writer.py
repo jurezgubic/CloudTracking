@@ -83,10 +83,20 @@ def initialize_netcdf(file_path, zt, ring_count, env_aloft_levels=40):
         root_grp.createVariable('env_aloft_shear', 'f4', ('track', 'time', 'height_aloft'), fill_value=np.nan)
         root_grp.createVariable('env_aloft_n2', 'f4', ('track', 'time', 'height_aloft'), fill_value=np.nan)
         root_grp.createVariable('env_aloft_rh', 'f4', ('track', 'time', 'height_aloft'), fill_value=np.nan)
+        
+        # Environment Aloft Variability (std)
+        root_grp.createVariable('env_aloft_qt_std', 'f4', ('track', 'time', 'height_aloft'), fill_value=np.nan)
+        root_grp.createVariable('env_aloft_thetal_std', 'f4', ('track', 'time', 'height_aloft'), fill_value=np.nan)
+        root_grp.createVariable('env_aloft_shear_std', 'f4', ('track', 'time', 'height_aloft'), fill_value=np.nan)
+        root_grp.createVariable('env_aloft_n2_std', 'f4', ('track', 'time', 'height_aloft'), fill_value=np.nan)
+        root_grp.createVariable('env_aloft_rh_std', 'f4', ('track', 'time', 'height_aloft'), fill_value=np.nan)
 
 
 def write_cloud_tracks_to_netcdf(tracks, track_id_to_index, tainted_tracks, env_mass_flux_per_level, file_path, timestep, zt, ring_count, env_aloft_levels=40):
     """Write cloud tracking data (including environment rings) to NetCDF for a timestep."""
+
+    if env_aloft_levels == -1:
+        env_aloft_levels = len(zt)
 
     # Create the file if it doesn't exist
     if not os.path.exists(file_path):
@@ -224,6 +234,12 @@ def write_cloud_tracks_to_netcdf(tracks, track_id_to_index, tainted_tracks, env_
                     root_grp.variables['env_aloft_shear'][i, timestep, :] = cloud.env_aloft_shear
                     root_grp.variables['env_aloft_n2'][i, timestep, :] = cloud.env_aloft_n2
                     root_grp.variables['env_aloft_rh'][i, timestep, :] = cloud.env_aloft_rh
+                    
+                    root_grp.variables['env_aloft_qt_std'][i, timestep, :] = cloud.env_aloft_qt_std
+                    root_grp.variables['env_aloft_thetal_std'][i, timestep, :] = cloud.env_aloft_thetal_std
+                    root_grp.variables['env_aloft_shear_std'][i, timestep, :] = cloud.env_aloft_shear_std
+                    root_grp.variables['env_aloft_n2_std'][i, timestep, :] = cloud.env_aloft_n2_std
+                    root_grp.variables['env_aloft_rh_std'][i, timestep, :] = cloud.env_aloft_rh_std
 
                 # Write split_from information if available
                 if hasattr(cloud, 'split_from') and cloud.split_from is not None:
