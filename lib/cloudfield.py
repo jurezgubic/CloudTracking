@@ -260,6 +260,46 @@ class CloudField:
         # Create Cloud objects in batches to manage memory
         clouds = {}
         batch_size = 50  # Process 50 clouds at a time
+
+        # --- Fixed Mean Area Sampling Setup ---
+        env_aloft_sampling_mode = config.get('env_aloft_sampling_mode', 'exact')
+        fixed_sampling_offsets = config.get('fixed_sampling_offsets', None)
+
+        if env_aloft_sampling_mode == 'fixed_mean_area' and fixed_sampling_offsets is None:
+            # Calculate mean projected area (in pixels) of all regions
+            valid_regions = [r for r in regions if r.area >= config['min_size']]
+            if valid_regions:
+                projected_areas = []
+                for r in valid_regions:
+                    # Project along Z axis (axis 0)
+                    projected_mask = np.any(r.image, axis=0)
+                    projected_areas.append(np.sum(projected_mask))
+                
+                mean_area_pixels = np.mean(projected_areas)
+                
+                # Calculate equivalent radius R = sqrt(A / pi)
+                R_eq = np.sqrt(mean_area_pixels / np.pi)
+                R_ceil = int(np.ceil(R_eq))
+                
+                # Generate circular offsets
+                offsets_y = []
+                offsets_x = []
+                for dy in range(-R_ceil, R_ceil + 1):
+                    for dx in range(-R_ceil, R_ceil + 1):
+                        if dy*dy + dx*dx <= R_eq*R_eq:
+                            offsets_y.append(dy)
+                            offsets_x.append(dx)
+                
+                fixed_sampling_offsets = (np.array(offsets_y), np.array(offsets_x))
+                config['fixed_sampling_offsets'] = fixed_sampling_offsets
+                
+                print(f"--- Fixed Mean Area Sampling Initialized ---")
+                print(f"Mean Projected Area: {mean_area_pixels:.1f} pixels")
+                print(f"Equivalent Radius: {R_eq:.2f} pixels")
+                print(f"Sample Points per Cloud: {len(offsets_y)}")
+            else:
+                print("Warning: No valid clouds found. Defaulting to single point.")
+                config['fixed_sampling_offsets'] = (np.array([0]), np.array([0]))
         
         for batch_start in range(0, len(regions), batch_size):
             batch_end = min(batch_start + batch_size, len(regions))
@@ -512,6 +552,38 @@ class CloudField:
                     abs_z_tops = valid_z_locals + region.bbox[0]
                     abs_ys = valid_ys + region.bbox[1]
                     abs_xs = valid_xs + region.bbox[2]
+
+                    # --- Sampling Mode Logic ---
+                    if env_aloft_sampling_mode == 'fixed_mean_area' and fixed_sampling_offsets is not None:
+                        if env_aloft_mode != 'flat':
+                            raise ValueError("Error: 'fixed_mean_area' sampling requires 'env_aloft_mode' to be 'flat'.")
+                        
+                        # Calculate Centroid (Y, X) in absolute coordinates
+                        local_centroid = region.centroid
+                        centroid_y_idx = int(local_centroid[1] + region.bbox[1])
+                        centroid_x_idx = int(local_centroid[2] + region.bbox[2])
+                        
+                        # Apply pre-calculated circular offsets
+                        offsets_y, offsets_x = fixed_sampling_offsets
+                        
+                        # Wrap periodic boundaries
+                        ny = len(yt)
+                        nx = len(xt)
+                        sample_ys = (centroid_y_idx + offsets_y) % ny
+                        sample_xs = (centroid_x_idx + offsets_x) % nx
+                        
+                        # Update abs_ys, abs_xs
+                        abs_ys = sample_ys
+                        abs_xs = sample_xs
+                        
+                        # Update abs_z_tops (all flat at max height)
+                        if len(abs_z_tops) > 0:
+                            max_z_idx = np.max(abs_z_tops)
+                        else:
+                            max_z_idx = int(max_height / (zt[1]-zt[0]))
+                        
+                        abs_z_tops = np.full(len(abs_ys), max_z_idx)
+
                     
                     # Loop over levels aloft
                     for k in range(n_aloft_levels):

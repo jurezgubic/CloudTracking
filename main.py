@@ -81,6 +81,8 @@ config = {
     # Environment aloft parameters
     'env_aloft_levels': -1,       # Number of levels above cloud top to analyze. Set to -1 for all levels!
     'env_aloft_mode': 'flat',     # 'flat' (plane above max top) or 'local' (following terrain above cloud)
+    'env_aloft_sampling_mode': 'fixed_mean_area', # 'exact' (cloud shape) or 'fixed_mean_area' (circle with mean cloud area)
+    # Note for 'fixed_mean_area': Assumes steady-state simulation (cloud sizes don't change massively).
 }
 # --- End of user modifiable parameters ---
 
