@@ -495,6 +495,17 @@ class CloudField:
                     valid_mask = top_z_local != -1
                     valid_ys, valid_xs = np.where(valid_mask)
                     valid_z_locals = top_z_local[valid_ys, valid_xs]
+
+                    # --- Environment Aloft Mode ---
+                    # 'flat': Use the maximum height of the cloud for all columns (flat plane above max top)
+                    # 'local': Use the local cloud top height for each column (following cloud terrain)
+                    env_aloft_mode = config.get('env_aloft_mode', 'flat')
+                    if env_aloft_mode == 'flat':
+                        # Use the maximum height of the cloud for all columns
+                        # valid_z_locals contains local Z indices relative to bbox min_z
+                        if len(valid_z_locals) > 0:
+                            max_local_z = np.max(valid_z_locals)
+                            valid_z_locals[:] = max_local_z
                     
                     # Convert to absolute coordinates
                     # region.bbox is (min_z, min_y, min_x, max_z, max_y, max_x)

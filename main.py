@@ -80,6 +80,7 @@ config = {
 
     # Environment aloft parameters
     'env_aloft_levels': -1,       # Number of levels above cloud top to analyze. Set to -1 for all levels!
+    'env_aloft_mode': 'flat',     # 'flat' (plane above max top) or 'local' (following terrain above cloud)
 }
 # --- End of user modifiable parameters ---
 
