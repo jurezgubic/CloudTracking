@@ -39,6 +39,11 @@ class CloudTracker:
         merges_count = 0
         splits_count = 0
 
+        # Handle empty cloud field
+        if not current_cloud_field.clouds:
+            print("No clouds found in this timestep, moving to next timestep.")
+            return
+
         if not self.cloud_tracks:  # First timestep
             for cloud_id, cloud in current_cloud_field.clouds.items():
                 cloud.age = 0
