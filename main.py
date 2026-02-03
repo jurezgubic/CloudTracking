@@ -1,6 +1,12 @@
 import argparse, os, gc, time
 from memory_profiler import profile
-from src.data_management import load_cloud_field_from_file, calculate_mean_velocities
+from src.data_management import (
+    load_cloud_field_from_file, 
+    calculate_mean_velocities,
+    create_data_adapter,
+    load_cloud_field_from_adapter,
+    calculate_mean_velocities_from_adapter
+)
 from src.netcdf_writer import write_cloud_tracks_to_netcdf
 from lib.cloudtracker import CloudTracker
 import src.data_management as data_management
@@ -8,15 +14,24 @@ import numpy as np
 from netCDF4 import Dataset
 
 # Warning!
-# User needs to modify: base_file_path, output_netcdf_path, file_names, total_timesteps, and config
+# User needs to modify: data paths, output_netcdf_path, total_timesteps, and config
 
-# --- Start of user modifiable parameters ---
+# =============================================================================
+# DATA FORMAT SELECTION
+# =============================================================================
+# Set 'data_format' to either 'UCLA-LES' (RICO, DALES) or 'MONC' (LBA, RCE)
 
-# Set file paths and parameters
+DATA_FORMAT = 'UCLA-LES'  # Options: 'UCLA-LES' or 'MONC'
+
+# =============================================================================
+# UCLA-LES / DALES Configuration (RICO example)
+# =============================================================================
+# Used when DATA_FORMAT = 'UCLA-LES'
+
 base_file_path = '/Users/jure/PhD/coding/RICO_1hr/'
 output_netcdf_path = 'cloud_results.nc'
 
-# paths to the LES data files
+# paths to the LES data files (one file per variable, all timesteps in each)
 file_name = {
     'l': 'rico.l.nc',  # Liquid water mixing ratio
     'u': 'rico.u.nc',  # u wind
@@ -28,14 +43,41 @@ file_name = {
     'r': 'rico.r.nc',  # Rain water mixing ratio (optional - zeros if missing)
 }
 
-# Processing Options
-total_timesteps = 4 # Number of timesteps to process
+# =============================================================================
+# MONC Configuration (LBA example)
+# =============================================================================
+# Used when DATA_FORMAT = 'MONC'
+# Each timestep is in a separate file: 3dfields_ts_{time}.nc
 
+monc_data_path = '/path/to/monc/output/'           # Directory with 3dfields_ts_*.nc files
+monc_config_file = '/path/to/lba_config.mcf'       # MONC configuration file
+monc_file_pattern = '3dfields_ts_{time}.nc'        # File naming pattern
+monc_output_netcdf_path = 'cloud_results_monc.nc'  # Output file for MONC runs
+
+# =============================================================================
+# Processing Options
+# =============================================================================
+total_timesteps = 4  # Number of timesteps to process (set to -1 to process all available)
+
+# =============================================================================
 # Cloud Definition and Tracking Configuration
+# =============================================================================
 config = {
+    # Data format selection (set at top of file)
+    'data_format': DATA_FORMAT,
+    
+    # UCLA-LES specific paths (used when data_format='UCLA-LES')
+    'base_file_path': base_file_path,
+    'file_name': file_name,
+    
+    # MONC specific paths (used when data_format='MONC')
+    'monc_data_path': monc_data_path,
+    'monc_config_file': monc_config_file,
+    'monc_file_pattern': monc_file_pattern,
+    
     # Cloud identification
     'min_size': 10,              # Minimum number of points for a cloud to be considered a cloud
-    'l_condition': 0.001,      # kg/kg. Minimum liquid water content for a point to be a cloud.
+    'l_condition': 0.001,        # kg/kg. Minimum liquid water content for a point to be a cloud.
     'w_condition': 0.0,          # m/s. Minimum vertical velocity for a point to be part of a cloud.
     'w_switch': False,           # If True, apply the 'w_condition' threshold.
     
@@ -88,7 +130,14 @@ config = {
     # Performance tuning
     'cloud_batch_size': 50,       # Number of clouds to process before forcing garbage collection
 }
-# --- End of user modifiable parameters ---
+
+# Select output path based on data format
+if DATA_FORMAT == 'MONC':
+    output_netcdf_path = monc_output_netcdf_path
+
+# =============================================================================
+# End of user modifiable parameters
+# =============================================================================
 
 
 
@@ -119,19 +168,28 @@ def resolve_cloud_base_altitude(config, z_levels):
     print(f"Cloud base requested at {target}m. Nearest resolved (and used) height is {resolved}m.")
 
 # @profile
-def process_clouds(cloud_tracker):
-    """Process clouds and mark partial lifecycle clouds as tainted."""
+def process_clouds(cloud_tracker, adapter, num_timesteps):
+    """Process clouds and mark partial lifecycle clouds as tainted.
+    
+    Parameters
+    ----------
+    cloud_tracker : CloudTracker
+        The cloud tracker instance
+    adapter : BaseDataAdapter
+        Data adapter for loading cloud fields
+    num_timesteps : int
+        Number of timesteps to process
+    """
     tainted_count = 0
     base_resolved = False
     
-    for timestep in range(total_timesteps):
+    for timestep in range(num_timesteps):
         start = time.time()
         print("-"*50)
-        print(f"Processing timestep {timestep+1} of {total_timesteps}")
+        print(f"Processing timestep {timestep+1} of {num_timesteps}")
 
-        cloud_field = data_management.load_cloud_field_from_file(
-            base_file_path, file_name, timestep, config
-        )
+        # Load cloud field using adapter
+        cloud_field = load_cloud_field_from_adapter(adapter, timestep, config)
 
         # Resolve base altitude once (after first load when zt is known)
         if not base_resolved:
@@ -224,7 +282,7 @@ def process_clouds(cloud_tracker):
     # Final Tainting Step
     # Clouds still active at the final timestep also have an incomplete lifecycle.
     final_partial_tracks = [tid for tid, track in cloud_tracker.cloud_tracks.items() 
-                           if track[-1].is_active and track[-1].timestep == total_timesteps - 1]
+                           if track[-1].is_active and track[-1].timestep == num_timesteps - 1]
     
     # Mark as tainted instead of deleting
     cloud_tracker.tainted_tracks.update(final_partial_tracks)
@@ -243,7 +301,7 @@ def process_clouds(cloud_tracker):
         cloud_tracker.tainted_tracks,
         cloud_field.env_mass_flux_per_level, 
         output_netcdf_path, 
-        total_timesteps - 1, 
+        num_timesteps - 1, 
         cloud_field.zt,
         config.get('env_ring_max_distance', 3),
         env_aloft_levels=config.get('env_aloft_levels', 40)
@@ -297,11 +355,29 @@ def main(delete_existing_file):
         os.remove(output_netcdf_path)
         print(f"Deleted existing file: {output_netcdf_path}")
 
+    # Create data adapter based on configuration
+    print(f"\nInitializing {config['data_format']} data adapter...")
+    adapter = create_data_adapter(config)
+    
+    # Determine number of timesteps to process
+    available_timesteps = adapter.get_total_timesteps()
+    if total_timesteps == -1 or total_timesteps > available_timesteps:
+        num_timesteps = available_timesteps
+        print(f"Processing all {num_timesteps} available timesteps")
+    else:
+        num_timesteps = total_timesteps
+        print(f"Processing {num_timesteps} of {available_timesteps} available timesteps")
+    
+    # Get grid info and update config with horizontal resolution
+    grid_info = adapter.get_grid_info()
+    config['horizontal_resolution'] = grid_info['dx']
+    print(f"Horizontal resolution: {config['horizontal_resolution']} m")
+
     # Initialize CloudTracker
     cloud_tracker = CloudTracker(config)
 
     # Process clouds - partial lifetime clouds will be marked as tainted (not removed)
-    process_clouds(cloud_tracker)
+    process_clouds(cloud_tracker, adapter, num_timesteps)
     
     # Calculate and display total time
     total_end_time = time.time()

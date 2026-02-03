@@ -3,6 +3,133 @@ import numpy as np
 from lib.cloudfield import CloudField
 from memory_profiler import profile
 import gc
+from typing import Dict, Any, Optional, Union
+
+# Import adapters
+from src.adapters.base_adapter import BaseDataAdapter
+from src.adapters.ucla_les_adapter import UCLALESAdapter
+from src.adapters.monc_adapter import MONCAdapter
+
+
+# =============================================================================
+# Adapter-based data loading (recommended for new code)
+# =============================================================================
+
+def create_data_adapter(config: Dict[str, Any]) -> BaseDataAdapter:
+    """
+    Factory function to create the appropriate data adapter based on config.
+    
+    Parameters
+    ----------
+    config : dict
+        Configuration dictionary. Must contain 'data_format' key with value
+        'UCLA-LES' or 'MONC'.
+        
+        For UCLA-LES:
+            - 'base_file_path': str - Path to data directory
+            - 'file_name': dict - Mapping of variables to filenames
+            
+        For MONC:
+            - 'monc_data_path': str - Path to MONC output directory
+            - 'monc_config_file': str - Path to .mcf config file
+            
+    Returns
+    -------
+    BaseDataAdapter
+        Configured data adapter instance
+        
+    Raises
+    ------
+    ValueError
+        If data_format is not recognized
+    """
+    data_format = config.get('data_format', 'UCLA-LES')
+    
+    if data_format.upper() in ['UCLA-LES', 'UCLA_LES', 'DALES', 'RICO']:
+        return UCLALESAdapter(config)
+    elif data_format.upper() == 'MONC':
+        return MONCAdapter(config)
+    else:
+        raise ValueError(
+            f"Unknown data format: {data_format}. "
+            f"Supported formats: 'UCLA-LES', 'MONC'"
+        )
+
+
+def load_cloud_field_from_adapter(
+    adapter: BaseDataAdapter,
+    timestep: int,
+    config: Dict[str, Any]
+) -> CloudField:
+    """
+    Load cloud data using an adapter and create a CloudField object.
+    
+    This is the recommended way to load data as it supports multiple formats.
+    
+    Parameters
+    ----------
+    adapter : BaseDataAdapter
+        Data adapter instance (created via create_data_adapter)
+    timestep : int
+        Timestep index to load (0-based)
+    config : dict
+        CloudTracker configuration dictionary
+        
+    Returns
+    -------
+    CloudField
+        CloudField object for the given timestep
+    """
+    # Load data using adapter
+    data = adapter.load_timestep(timestep)
+    
+    # Create CloudField object
+    cloud_field = CloudField(
+        data['l'],
+        data['u'],
+        data['v'],
+        data['w'],
+        data['p'],
+        data['theta_l'],
+        data['q_t'],
+        data['r'],
+        timestep,
+        config,
+        data['xt'],
+        data['yt'],
+        data['zt']
+    )
+    
+    gc.collect()
+    
+    return cloud_field
+
+
+def calculate_mean_velocities_from_adapter(
+    adapter: BaseDataAdapter,
+    timestep: int
+) -> tuple:
+    """
+    Calculate mean velocities using an adapter.
+    
+    Parameters
+    ----------
+    adapter : BaseDataAdapter
+        Data adapter instance
+    timestep : int
+        Timestep index
+        
+    Returns
+    -------
+    tuple
+        (mean_u, mean_v) arrays of shape (nz,)
+    """
+    return adapter.load_mean_velocities(timestep)
+
+
+# =============================================================================
+# Legacy functions (for backward compatibility with existing code)
+# =============================================================================
 
 # @profile
 def load_cloud_field_from_file(file_path, file_names, timestep, config):
