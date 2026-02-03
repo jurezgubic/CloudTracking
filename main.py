@@ -84,6 +84,9 @@ config = {
     'env_aloft_mode': 'flat',     # 'flat' (plane above max top) or 'local' (following terrain above cloud)
     'env_aloft_sampling_mode': 'fixed_mean_area', # 'exact' (cloud shape) or 'fixed_mean_area' (circle with mean cloud area)
     # Note for 'fixed_mean_area': Assumes steady-state simulation (cloud sizes don't change massively).
+
+    # Performance tuning
+    'cloud_batch_size': 50,       # Number of clouds to process before forcing garbage collection
 }
 # --- End of user modifiable parameters ---
 

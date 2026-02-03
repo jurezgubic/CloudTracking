@@ -263,7 +263,7 @@ class CloudField:
 
         # Create Cloud objects in batches to manage memory
         clouds = {}
-        batch_size = 50  # Process 50 clouds at a time
+        batch_size = config.get('cloud_batch_size', 50)
 
         # --- Fixed Mean Area Sampling Setup ---
         env_aloft_sampling_mode = config.get('env_aloft_sampling_mode', 'exact')
