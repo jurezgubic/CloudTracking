@@ -71,16 +71,16 @@ def load_u_field(file_path, file_name, timestep):
     Load u wind data from files for a specific timestep.
     Returns: u wind data for the given timestep.
     """
-    u_dataset = Dataset(f"{file_path}{file_name}", 'r')
-    return u_dataset.variables['u'][timestep, :, :, :]
+    with Dataset(f"{file_path}{file_name}", 'r') as u_dataset:
+        return np.array(u_dataset.variables['u'][timestep, :, :, :])
 
 def load_v_field(file_path, file_name, timestep):
     """
     Load v wind data from files for a specific timestep.
     Returns: v wind data for the given timestep.
     """
-    v_dataset = Dataset(f"{file_path}{file_name}", 'r')
-    return v_dataset.variables['v'][timestep, :, :, :]
+    with Dataset(f"{file_path}{file_name}", 'r') as v_dataset:
+        return np.array(v_dataset.variables['v'][timestep, :, :, :])
 
 # currently redundant but will be used to get rid of load_cloud_field_from_file
 # which will be split into load_w_field and load_l_field
@@ -89,8 +89,8 @@ def load_w_field(file_path, file_name, timestep):
     Load w wind data from files for a specific timestep.
     Returns: w wind data for the given timestep.
     """
-    w_dataset = Dataset(f"{file_path}{file_name}", 'r')
-    return w_dataset.variables['w'][timestep, :, :, :]
+    with Dataset(f"{file_path}{file_name}", 'r') as w_dataset:
+        return np.array(w_dataset.variables['w'][timestep, :, :, :])
 
 # currently redundant but will be used to get rid of load_cloud_field_from_file
 def load_p_field(file_path, file_name, timestep):
@@ -98,8 +98,8 @@ def load_p_field(file_path, file_name, timestep):
     Load pressure data from files for a specific timestep.
     Returns: pressure data for the given timestep.
     """
-    p_dataset = Dataset(f"{file_path}{file_name}", 'r')
-    return p_dataset.variables['p'][timestep, :, :, :]
+    with Dataset(f"{file_path}{file_name}", 'r') as p_dataset:
+        return np.array(p_dataset.variables['p'][timestep, :, :, :])
 
 # currently redundant but will be used to get rid of load_cloud_field_from_file
 def load_theta_l_field(file_path, file_name, timestep):
@@ -107,8 +107,8 @@ def load_theta_l_field(file_path, file_name, timestep):
     Load liq water potential temperature data from files for a specific timestep.
     Returns: liq watwe potential temperature data for the given timestep.
     """
-    theta_l_dataset = Dataset(f"{file_path}{file_name}", 'r')
-    return theta_l_dataset.variables['theta_l'][timestep, :, :, :]
+    with Dataset(f"{file_path}{file_name}", 'r') as theta_l_dataset:
+        return np.array(theta_l_dataset.variables['theta_l'][timestep, :, :, :])
 
 # currently redundant but will be used to get rid of load_cloud_field_from_file
 def load_q_t_field(file_path, file_name, timestep):
@@ -116,8 +116,8 @@ def load_q_t_field(file_path, file_name, timestep):
     Load total water mixing ratio data from files for a specific timestep.
     Returns: total water mixing ratio data for the given timestep.
     """
-    q_t_dataset = Dataset(f"{file_path}{file_name}", 'r')
-    return q_t_dataset.variables['q_t'][timestep, :, :, :]
+    with Dataset(f"{file_path}{file_name}", 'r') as q_t_dataset:
+        return np.array(q_t_dataset.variables['q_t'][timestep, :, :, :])
 
 def calculate_mean_velocities(file_path, file_names, timestep):
     """Calculates mean wind velocities for each z-level at the given timestep."""
