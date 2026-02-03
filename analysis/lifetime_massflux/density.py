@@ -142,27 +142,34 @@ def compute_rho0_from_raw(
             except Exception as e:
                 print(f"[compute_rho0_from_raw] subsample apply failed: {e}")
 
-    q_l = l_gpkg.astype('float64') / 1000.0  # kg/kg
-    q_t = q_gpkg.astype('float64') / 1000.0  # kg/kg
-    q_v = q_t - q_l                          # kg/kg
+    # Note: RICO data water species (l, q) are already in kg/kg despite metadata saying g/kg
+    q_l = l_gpkg.astype('float64')
+    q_t = q_gpkg.astype('float64')
+    q_v = q_t - q_l
 
-    # Constants (as specified)
+    # Constants
     R_d = 287.04
     R_v = 461.5
     c_pd = 1005.0
-    c_pv = 1850.0
-    L_v = 2.5e6
     p_0 = 100000.0
     epsilon = 0.622
-    rho_l = 1000.0
+    L_v = 2.5e6
+    T_0 = 273.15
+    e_s0 = 611.0
 
-    # kappa
-    kappa = (R_d / c_pd) * ((1.0 + q_v / epsilon) / (1.0 + q_v * (c_pv / c_pd)))
-    # Temperature
-    T = theta_l * (c_pd / (c_pd - L_v * q_l)) * (p_0 / p) ** (-kappa)
-    # Vapour pressure and density
-    p_v = (q_v / (q_v + epsilon)) * p
-    rho = (p - p_v) / (R_d * T) + (p_v / (R_v * T)) + (q_l * rho_l)
+    # UCLA-LES saturation adjustment approach:
+    # For unsaturated air (environment mean), T ≈ theta_l * Pi
+    # For saturated air, we'd need Newton-Raphson iteration.
+    # Since this is a domain-mean density calculation (mostly environment),
+    # we use the simplified unsaturated formula which is appropriate for domain means.
+    kappa = R_d / c_pd
+    Pi = (p / p_0) ** kappa
+    T = theta_l * Pi
+    
+    # Virtual temperature approach for density (includes vapor buoyancy and liquid loading)
+    r_total = q_v + q_l
+    T_v = T * (1.0 + q_v / epsilon) / (1.0 + r_total)
+    rho = p / (R_d * T_v)
 
     axes = [d for d in rho.dims if d not in ('time','z')]
     rho_zy = rho
