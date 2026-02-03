@@ -1,57 +1,66 @@
+"""
+Tests for KD-tree based cloud matching.
+
+These tests verify that CloudTracker.is_match() correctly identifies
+cloud matches between timesteps using surface point overlap.
+"""
 import unittest
 import numpy as np
 from lib.cloud import Cloud
 from lib.cloudtracker import CloudTracker
+from tests.test_utils import MockCloudField
 
-# Skip these tests - they require full KD-tree setup which has changed significantly.
-# The is_match method now requires a proper CloudField with surface_points_kdtree,
-# surface_point_to_cloud_id, and surface_points_array attributes.
-# These tests need to be rewritten to use the actual CloudField class or proper mocks.
 
-@unittest.skip("Tests require KD-tree setup - API has changed")
 class TestCloudMatching(unittest.TestCase):
+    """Test cloud matching using KD-tree based surface point overlap."""
     
     def setUp(self):
         """Set up test environment before each test."""
         # Define config with known values
         self.config = {
-            'horizontal_resolution': 25.0,  # Threshold for matching
-            'u_drift': -5.0,                # Horizontal drift in x
-            'v_drift': -4.0,                # Horizontal drift in y
-            'timestep_duration': 60,        # Seconds between timesteps
-            'switch_background_drift': True, # Use background drift
-            'switch_wind_drift': True,       # Use wind drift calculations
-            'switch_vertical_drift': True,   # Enable vertical drift
+            'horizontal_resolution': 25.0,
+            'timestep_duration': 60,
+            'switch_background_drift': False,
+            'switch_wind_drift': False,
+            'switch_vertical_drift': False,
             'max_expected_cloud_speed': 20.0,
             'bounding_box_safety_factor': 2.0,
+            'use_pre_filtering': False,
+            'match_safety_factor_dynamic': 2.0,
+            'min_h_match_factor': 1.0,
+            'min_v_match_factor': 1.0,
+            'min_surface_overlap_points': 1,
         }
         
-        # Create CloudTracker instance
+        # Create CloudTracker instance and set up domain info
         self.cloud_tracker = CloudTracker(self.config)
-        
-        # Mock the drift calculation to return controlled values
-        self.cloud_tracker.drift_translation_calculation = lambda: (-5.0, -4.0)
-        self.cloud_tracker.wind_drift_calculation = lambda z: (0.0, 0.0) if z < 500 else (-1.0, -0.5)
-        self.cloud_tracker.vertical_drift_calculation = lambda z: 2.0 if z < 500 else 3.5  # Mock vertical drift
-        
-        # Set mean_w values for vertical velocity
-        self.cloud_tracker.mean_w = np.array([0.03, 0.04, 0.05, 0.06, 0.07])
         self.cloud_tracker.zt = np.array([100, 300, 500, 700, 900])
+        self.cloud_tracker.xt = np.linspace(0, 1000, 41)  # 25m resolution
+        self.cloud_tracker.yt = np.linspace(0, 1000, 41)
+        self.cloud_tracker.domain_size_x = 1000.0
+        self.cloud_tracker.domain_size_y = 1000.0
         
-        # Default arrays for Cloud constructor
-        self.mean_u = np.zeros(5)
-        self.mean_v = np.zeros(5)
-        self.mean_w_arr = np.zeros(5)
+    def _create_cloud(self, cloud_id, location, surface_points, 
+                      mean_u=0.0, mean_v=0.0, mean_w=0.0, is_active=True):
+        """
+        Helper to create Cloud with all required parameters.
         
-        # Mock cloud field for is_match calls
-        class MockCloudField:
-            def __init__(self, clouds_dict):
-                self.clouds = clouds_dict
-                self.surface_points_kdtree = None  # Let is_match use fallback logic
-        self.MockCloudField = MockCloudField
+        Parameters:
+        -----------
+        cloud_id : int
+            Unique identifier
+        location : tuple
+            (x, y, z) center location
+        surface_points : list or np.ndarray
+            Surface point coordinates as list of (x, y, z) tuples
+        mean_u, mean_v, mean_w : float
+            Mean velocities (scalar values used for drift prediction)
+        is_active : bool
+            Whether cloud is active
+        """
+        if not isinstance(surface_points, np.ndarray):
+            surface_points = np.array(surface_points, dtype=np.float32)
         
-    def _create_cloud(self, cloud_id, location, points, timestep, max_height, is_active=True):
-        """Helper to create Cloud with all required parameters."""
         return Cloud(
             cloud_id=cloud_id,
             size=100,
@@ -59,15 +68,15 @@ class TestCloudMatching(unittest.TestCase):
             cloud_base_area=20,
             cloud_base_height=location[2],
             location=location,
-            points=points,
-            surface_points=np.array([points[0]]),  # numpy array for .any() call
-            timestep=timestep,
-            max_height=max_height,
+            points=[location],
+            surface_points=surface_points,
+            timestep=0,
+            max_height=location[2],
             max_w=1.0,
             max_w_cloud_base=0.5,
-            mean_u=self.mean_u,
-            mean_v=self.mean_v,
-            mean_w=self.mean_w_arr,
+            mean_u=mean_u,  # Scalar: cloud's mean u-velocity
+            mean_v=mean_v,  # Scalar: cloud's mean v-velocity
+            mean_w=mean_w,  # Scalar: cloud's mean w-velocity
             ql_flux=0.1,
             mass_flux=0.2,
             mass_flux_per_level=[0.2],
@@ -80,157 +89,195 @@ class TestCloudMatching(unittest.TestCase):
         )
         
     def test_exact_match(self):
-        """Test when clouds are exactly matched after drift."""
-        # Cloud at t0
+        """Test when clouds have overlapping surface points."""
+        # Cloud at t0 with surface points around (100, 100, 500)
+        surface_pts_t0 = [(100, 100, 500), (125, 100, 500), (100, 125, 500)]
         cloud_t0 = self._create_cloud(
             cloud_id=1,
             location=(100, 100, 500),
-            points=[(100, 100, 500), (125, 100, 500), (100, 125, 500)],
-            timestep=0,
-            max_height=500
+            surface_points=surface_pts_t0,
         )
         
-        # Cloud at t1 - exact match with drift
-        # Points moved exactly by drift: (-5, -4)
+        # Cloud at t1 with overlapping surface points
+        # Same location = should match
+        surface_pts_t1 = [(100, 100, 500), (125, 100, 500), (100, 125, 500)]
         cloud_t1 = self._create_cloud(
             cloud_id=2,
-            location=(95, 96, 500),  # Moved by drift
-            points=[(95, 96, 500), (120, 96, 500), (95, 121, 500)],  # Each point moved by drift
-            timestep=1,
-            max_height=500
+            location=(100, 100, 500),
+            surface_points=surface_pts_t1,
         )
         
-        # Create mock cloud field containing cloud_t1
-        mock_cloud_field = self.MockCloudField({cloud_t1.cloud_id: cloud_t1})
+        # Build mock cloud field with cloud_t1 (current timestep)
+        mock_cloud_field = MockCloudField({cloud_t1.cloud_id: cloud_t1})
         
         self.assertTrue(self.cloud_tracker.is_match(cloud_t1, cloud_t0, mock_cloud_field),
-                       "Should match when cloud points are exactly displaced by drift")
+                       "Should match when cloud surface points overlap exactly")
 
     def test_nearby_match(self):
         """Test when clouds are slightly offset but within threshold."""
         # Cloud at t0
+        surface_pts_t0 = [(100, 100, 500)]
         cloud_t0 = self._create_cloud(
             cloud_id=1,
             location=(100, 100, 500),
-            points=[(100, 100, 500)],
-            timestep=0,
-            max_height=500
+            surface_points=surface_pts_t0,
         )
         
-        # Cloud at t1 - nearby but within threshold
-        # Points moved by drift + small offset (within threshold)
+        # Cloud at t1 - nearby but within horizontal threshold (25m)
+        # Distance = √(10² + 10²) ≈ 14.14, which is < 25
+        surface_pts_t1 = [(110, 110, 500)]
         cloud_t1 = self._create_cloud(
             cloud_id=2,
-            location=(95 + 10, 96 + 10, 500),  # Drift + offset
-            points=[(95 + 10, 96 + 10, 500)],  # Drift + offset but within threshold (25.0)
-            timestep=1,
-            max_height=500
+            location=(110, 110, 500),
+            surface_points=surface_pts_t1,
         )
         
-        # Distance is √(10² + 10²) = √200 ≈ 14.14, which is < 25
-        mock_cloud_field = self.MockCloudField({cloud_t1.cloud_id: cloud_t1})
+        mock_cloud_field = MockCloudField({cloud_t1.cloud_id: cloud_t1})
         self.assertTrue(self.cloud_tracker.is_match(cloud_t1, cloud_t0, mock_cloud_field),
                        "Should match when cloud points are within threshold distance")
 
     def test_no_match_distance(self):
         """Test when clouds are too far apart to match."""
         # Cloud at t0
+        surface_pts_t0 = [(100, 100, 500)]
         cloud_t0 = self._create_cloud(
             cloud_id=1,
             location=(100, 100, 500),
-            points=[(100, 100, 500)],
-            timestep=0,
-            max_height=500
+            surface_points=surface_pts_t0,
         )
         
-        # Cloud at t1 - too far away (beyond threshold)
-        # Points moved by drift + large offset (beyond threshold)
+        # Cloud at t1 - too far away (beyond threshold of 25m)
+        # Distance = 50m which is > 25m
+        surface_pts_t1 = [(150, 100, 500)]
         cloud_t1 = self._create_cloud(
             cloud_id=2,
-            location=(95 + 30, 96 + 0, 500),  # Offset by 30 in x
-            points=[(95 + 30, 96 + 0, 500)],  # Beyond threshold in x direction
-            timestep=1,
-            max_height=500
+            location=(150, 100, 500),
+            surface_points=surface_pts_t1,
         )
         
-        mock_cloud_field = self.MockCloudField({cloud_t1.cloud_id: cloud_t1})
+        mock_cloud_field = MockCloudField({cloud_t1.cloud_id: cloud_t1})
         self.assertFalse(self.cloud_tracker.is_match(cloud_t1, cloud_t0, mock_cloud_field),
                         "Should not match when cloud points are beyond threshold distance")
     
-    def test_height_specific_drift(self):
-        """Test that height-specific wind drift is correctly applied."""
-        # Cloud at t0 (high altitude)
-        cloud_t0_high = self._create_cloud(
+    def test_drift_prediction_match(self):
+        """Test that cloud velocity is used to predict position."""
+        # Cloud at t0 moving at 0.4 m/s in x direction (24m in 60s)
+        # The predicted location after 60s will be x=124
+        surface_pts_t0 = [(100, 100, 500)]
+        cloud_t0 = self._create_cloud(
             cloud_id=1,
-            location=(100, 100, 800),  # High altitude = additional drift
-            points=[(100, 100, 800)],
-            timestep=0,
-            max_height=800
+            location=(100, 100, 500),
+            surface_points=surface_pts_t0,
+            mean_u=0.4,  # 0.4 m/s * 60s = 24m displacement
+            mean_v=0.0,
+            mean_w=0.0,
         )
         
-        # Cloud at t1 - matching with height-specific drift
-        # Base drift (-5, -4) + wind drift (-1, -0.5) at height 800
-        cloud_t1_high = self._create_cloud(
+        # Cloud at t1 is at x=124 (where we predicted t0 would be)
+        # This should match because drift-adjusted t0 points overlap with t1
+        surface_pts_t1 = [(124, 100, 500)]
+        cloud_t1 = self._create_cloud(
             cloud_id=2,
-            location=(94, 95.5, 800),  # Total drift: -6, -4.5
-            points=[(94, 95.5, 800)],
-            timestep=1,
-            max_height=800
+            location=(124, 100, 500),
+            surface_points=surface_pts_t1,
         )
         
-        mock_cloud_field = self.MockCloudField({cloud_t1_high.cloud_id: cloud_t1_high})
-        self.assertTrue(self.cloud_tracker.is_match(cloud_t1_high, cloud_t0_high, mock_cloud_field),
-                       "Should match with correct height-specific wind drift")
+        mock_cloud_field = MockCloudField({cloud_t1.cloud_id: cloud_t1})
+        self.assertTrue(self.cloud_tracker.is_match(cloud_t1, cloud_t0, mock_cloud_field),
+                       "Should match when drift-predicted location overlaps with new cloud")
                        
     def test_vertical_drift_match(self):
         """Test that vertical drift is correctly applied for matching."""
-        # Cloud at t0
+        # Cloud at t0 with upward velocity
+        surface_pts_t0 = [(100, 100, 500)]
         cloud_t0 = self._create_cloud(
             cloud_id=1,
             location=(100, 100, 500),
-            points=[(100, 100, 500)],
-            timestep=0,
-            max_height=500
+            surface_points=surface_pts_t0,
+            mean_u=0.0,
+            mean_v=0.0,
+            mean_w=0.3,  # 0.3 m/s * 60s = 18m vertical movement
         )
         
-        # Cloud at t1 - with horizontal drift and vertical movement
-        # Horizontal drift: (-5, -4)
-        # Vertical drift: +2.0 for height < 500
+        # Cloud at t1 - at the predicted vertical location
+        surface_pts_t1 = [(100, 100, 518)]  # 500 + 18
         cloud_t1 = self._create_cloud(
             cloud_id=2,
-            location=(95, 96, 500 + 2.0),  # Applied drift and vertical movement
-            points=[(95, 96, 500 + 2.0)],
-            timestep=1,
-            max_height=500 + 2.0
+            location=(100, 100, 518),
+            surface_points=surface_pts_t1,
         )
         
-        mock_cloud_field = self.MockCloudField({cloud_t1.cloud_id: cloud_t1})
+        mock_cloud_field = MockCloudField({cloud_t1.cloud_id: cloud_t1})
         self.assertTrue(self.cloud_tracker.is_match(cloud_t1, cloud_t0, mock_cloud_field),
-                       "Should match when cloud points move with horizontal and vertical drift")
+                       "Should match when cloud points move with vertical drift")
                        
     def test_large_vertical_movement_no_match(self):
         """Test that clouds with too much vertical movement don't match."""
-        # Cloud at t0
+        # Cloud at t0 (stationary - no predicted vertical movement)
+        surface_pts_t0 = [(100, 100, 500)]
         cloud_t0 = self._create_cloud(
             cloud_id=1,
             location=(100, 100, 500),
-            points=[(100, 100, 500)],
-            timestep=0,
-            max_height=500
+            surface_points=surface_pts_t0,
+            mean_u=0.0,
+            mean_v=0.0,
+            mean_w=0.0,  # No vertical velocity
         )
         
-        # Cloud at t1 - with correct horizontal drift but excessive vertical movement
+        # Cloud at t1 - with large unexpected vertical movement
+        # Vertical threshold is at least 25m (min_v_match_factor * horizontal_resolution)
+        # 50m exceeds this threshold
+        surface_pts_t1 = [(100, 100, 550)]  # 50m vertical offset
         cloud_t1 = self._create_cloud(
             cloud_id=2,
-            location=(95, 96, 500 + 50),  # 50m is beyond the vertical threshold
-            points=[(95, 96, 500 + 50)],
-            timestep=1,
-            max_height=500 + 50
+            location=(100, 100, 550),
+            surface_points=surface_pts_t1,
         )
         
-        mock_cloud_field = self.MockCloudField({cloud_t1.cloud_id: cloud_t1})
+        mock_cloud_field = MockCloudField({cloud_t1.cloud_id: cloud_t1})
         self.assertFalse(self.cloud_tracker.is_match(cloud_t1, cloud_t0, mock_cloud_field),
                         "Should not match when vertical movement exceeds threshold")
+
+    def test_inactive_cloud_no_match(self):
+        """Test that inactive clouds are not matched."""
+        surface_pts_t0 = [(100, 100, 500)]
+        cloud_t0 = self._create_cloud(
+            cloud_id=1,
+            location=(100, 100, 500),
+            surface_points=surface_pts_t0,
+            is_active=False,  # Inactive
+        )
+        
+        surface_pts_t1 = [(100, 100, 500)]
+        cloud_t1 = self._create_cloud(
+            cloud_id=2,
+            location=(100, 100, 500),
+            surface_points=surface_pts_t1,
+        )
+        
+        mock_cloud_field = MockCloudField({cloud_t1.cloud_id: cloud_t1})
+        self.assertFalse(self.cloud_tracker.is_match(cloud_t1, cloud_t0, mock_cloud_field),
+                        "Should not match when previous cloud is inactive")
+
+    def test_empty_surface_points_no_match(self):
+        """Test that clouds with empty surface points don't match."""
+        cloud_t0 = self._create_cloud(
+            cloud_id=1,
+            location=(100, 100, 500),
+            surface_points=np.array([], dtype=np.float32).reshape(0, 3),  # Empty
+        )
+        
+        surface_pts_t1 = [(100, 100, 500)]
+        cloud_t1 = self._create_cloud(
+            cloud_id=2,
+            location=(100, 100, 500),
+            surface_points=surface_pts_t1,
+        )
+        
+        mock_cloud_field = MockCloudField({cloud_t1.cloud_id: cloud_t1})
+        self.assertFalse(self.cloud_tracker.is_match(cloud_t1, cloud_t0, mock_cloud_field),
+                        "Should not match when previous cloud has no surface points")
+
 
 if __name__ == '__main__':
     unittest.main()

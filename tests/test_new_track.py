@@ -1,16 +1,18 @@
+"""
+Tests for cloud track creation.
+
+These tests verify that CloudTracker correctly creates new tracks
+and handles the update_tracks() workflow.
+"""
 import unittest
 import numpy as np
 from lib.cloudtracker import CloudTracker
 from lib.cloud import Cloud
+from tests.test_utils import MockCloudField
 
-# Skip this test - it requires full KD-tree setup which has changed significantly.
-# The is_match method now requires a proper CloudField with surface_points_kdtree,
-# surface_point_to_cloud_id, and surface_points_array attributes.
-# This test needs to be rewritten to use the actual CloudField class or proper mocks.
 
-@unittest.skip("Test requires KD-tree setup - API has changed")
 class TestCloudTracker(unittest.TestCase):
-    """Test the CloudTracker class."""
+    """Test the CloudTracker class track creation."""
     
     def setUp(self):
         """Set up the test case."""
@@ -18,31 +20,42 @@ class TestCloudTracker(unittest.TestCase):
         self.config = {
             'horizontal_resolution': 25.0,
             'timestep_duration': 60,
-            'switch_background_drift': True,  # Enable drift
-            'switch_wind_drift': True,
-            'switch_vertical_drift': True,
+            'switch_background_drift': False,
+            'switch_wind_drift': False,
+            'switch_vertical_drift': False,
             'max_expected_cloud_speed': 20.0,
             'bounding_box_safety_factor': 2.0,
-            'use_pre_filtering': False,  # Disable pre-filtering for simpler tests
+            'use_pre_filtering': False,
+            'match_safety_factor_dynamic': 2.0,
+            'min_h_match_factor': 1.0,
+            'min_v_match_factor': 1.0,
+            'min_surface_overlap_points': 1,
         }
         self.cloud_tracker = CloudTracker(self.config)
         
-        # Set realistic velocities for Cloud constructor
-        self.mean_u = np.ones(10) * 0.17  # ~10m per minute in x
-        self.mean_v = np.ones(10) * 0.17  # ~10m per minute in y 
-        self.mean_w = np.ones(10) * 0.83  # ~50m per minute in z
+        # Set up domain info
         self.zt = np.linspace(0, 1000, 10)
-        self.xt = np.arange(0, 1000, 25.0)  # x coordinates
-        self.yt = np.arange(0, 1000, 25.0)  # y coordinates
+        self.xt = np.linspace(0, 1000, 41)  # 25m resolution
+        self.yt = np.linspace(0, 1000, 41)
         
-        # Override the drift calculation to return zero for testing
-        self.cloud_tracker.drift_translation_calculation = lambda: (0.0, 0.0)
-        self.cloud_tracker.wind_drift_calculation = lambda z: (0.0, 0.0)
-        self.cloud_tracker.vertical_drift_calculation = lambda z: 0.0
+        # Initialize tracker domain info
+        self.cloud_tracker.zt = self.zt
+        self.cloud_tracker.xt = self.xt
+        self.cloud_tracker.yt = self.yt
+        self.cloud_tracker.domain_size_x = 1000.0
+        self.cloud_tracker.domain_size_y = 1000.0
         
     def create_mock_cloud(self, cloud_id, x, y, z, is_active=True, age=0):
         """Create a mock cloud for testing."""
-        points = [(x, y, z)]
+        # Create surface points around the center
+        surface_points = np.array([
+            [x, y, z],
+            [x+10, y, z],
+            [x, y+10, z],
+            [x-10, y, z],
+            [x, y-10, z],
+        ], dtype=np.float32)
+        
         return Cloud(
             cloud_id=cloud_id,
             size=10,
@@ -50,15 +63,15 @@ class TestCloudTracker(unittest.TestCase):
             cloud_base_area=5,
             cloud_base_height=z,
             location=(x, y, z),
-            points=points,
-            surface_points=np.array([points[0]]),
+            points=[(x, y, z)],
+            surface_points=surface_points,
             timestep=0,
             max_height=z,
             max_w=1.0,
             max_w_cloud_base=0.5,
-            mean_u=self.mean_u,
-            mean_v=self.mean_v,
-            mean_w=self.mean_w,
+            mean_u=0.0,  # Scalar values for is_match
+            mean_v=0.0,
+            mean_w=0.0,
             ql_flux=0.1,
             mass_flux=0.2,
             mass_flux_per_level=np.zeros(10),
@@ -71,28 +84,18 @@ class TestCloudTracker(unittest.TestCase):
             age=age
         )
         
-    def create_mock_cloud_field(self, clouds, timestep=0):
-        """Create a mock cloud field for testing."""
-        class MockCloudField:
-            def __init__(self, clouds_dict, ts=0):
-                self.clouds = clouds_dict
-                self.timestep = ts
-                self.surface_points_kdtree = None  # Let is_match skip KD-tree logic
-        
-        return MockCloudField({cloud.cloud_id: cloud for cloud in clouds}, timestep)
-        
     def test_inactive_cloud_doesnt_match_new_cloud(self):
         """Test that new clouds don't get matched with inactive clouds."""
         # Timestep 1: Cloud A appears
         cloud_a_t1 = self.create_mock_cloud(1, 100, 100, 500)
-        cloud_field_t1 = self.create_mock_cloud_field([cloud_a_t1])
+        cloud_field_t1 = MockCloudField({cloud_a_t1.cloud_id: cloud_a_t1})
         
         # Process first timestep - should create a new track
         self.cloud_tracker.update_tracks(cloud_field_t1, self.zt, self.xt, self.yt)
         
-        # Timestep 2: Cloud A moves WITHIN thresholds
-        cloud_a_t2 = self.create_mock_cloud(2, 110, 110, 520, age=1)  # 520 instead of 550
-        cloud_field_t2 = self.create_mock_cloud_field([cloud_a_t2])
+        # Timestep 2: Cloud A at same location (should match)
+        cloud_a_t2 = self.create_mock_cloud(2, 100, 100, 500, age=1)
+        cloud_field_t2 = MockCloudField({cloud_a_t2.cloud_id: cloud_a_t2})
         
         # Process second timestep - should match and add to track
         self.cloud_tracker.update_tracks(cloud_field_t2, self.zt, self.xt, self.yt)
@@ -108,7 +111,7 @@ class TestCloudTracker(unittest.TestCase):
         
         # Timestep 3: Cloud A is gone, Cloud B appears far away
         cloud_b_t3 = self.create_mock_cloud(3, 500, 500, 400)  # Different location
-        cloud_field_t3 = self.create_mock_cloud_field([cloud_b_t3])
+        cloud_field_t3 = MockCloudField({cloud_b_t3.cloud_id: cloud_b_t3})
         
         # Process third timestep
         self.cloud_tracker.update_tracks(cloud_field_t3, self.zt, self.xt, self.yt)
@@ -134,6 +137,35 @@ class TestCloudTracker(unittest.TestCase):
         self.assertEqual(len(track_b), 1, "Track B should have 1 cloud")
         self.assertEqual(track_b[0].cloud_id, 3, "Track B should contain Cloud B")
         self.assertEqual(track_b[0].age, 0, "Cloud B should have age 0")
+
+    def test_first_cloud_creates_new_track(self):
+        """Test that the first cloud creates a new track."""
+        cloud = self.create_mock_cloud(1, 100, 100, 500)
+        cloud_field = MockCloudField({cloud.cloud_id: cloud})
+        
+        self.cloud_tracker.update_tracks(cloud_field, self.zt, self.xt, self.yt)
+        
+        self.assertEqual(len(self.cloud_tracker.cloud_tracks), 1,
+                         "Should have exactly one track after first cloud")
+        
+    def test_matched_cloud_extends_track(self):
+        """Test that a matched cloud extends an existing track."""
+        # First cloud
+        cloud_t1 = self.create_mock_cloud(1, 100, 100, 500)
+        cloud_field_t1 = MockCloudField({cloud_t1.cloud_id: cloud_t1})
+        self.cloud_tracker.update_tracks(cloud_field_t1, self.zt, self.xt, self.yt)
+        
+        # Second cloud at same location (overlapping surface points)
+        cloud_t2 = self.create_mock_cloud(2, 100, 100, 500)
+        cloud_field_t2 = MockCloudField({cloud_t2.cloud_id: cloud_t2})
+        self.cloud_tracker.update_tracks(cloud_field_t2, self.zt, self.xt, self.yt)
+        
+        # Should still have 1 track with 2 clouds
+        self.assertEqual(len(self.cloud_tracker.cloud_tracks), 1,
+                         "Should still have exactly one track")
+        track = list(self.cloud_tracker.cloud_tracks.values())[0]
+        self.assertEqual(len(track), 2, "Track should have 2 clouds")
+
 
 if __name__ == '__main__':
     unittest.main()
