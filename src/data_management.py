@@ -43,11 +43,24 @@ def load_cloud_field_from_file(file_path, file_names, timestep, config):
     with Dataset(f"{file_path}{file_names['w']}", 'r') as dataset:
         w_data = dataset.variables['w'][timestep, :, :, :]
     
+    # Load rain water mixing ratio (optional - zeros if file missing)
+    # Note: Rain is excluded from saturation adjustment but included in density loading
+    if 'r' in file_names:
+        r_file_path = f"{file_path}{file_names['r']}"
+        try:
+            with Dataset(r_file_path, 'r') as dataset:
+                r_data = dataset.variables['r'][timestep, :, :, :]
+        except (FileNotFoundError, OSError):
+            print(f"Rain file not found at {r_file_path}, using zeros for rain water.")
+            r_data = np.zeros_like(l_data)
+    else:
+        r_data = np.zeros_like(l_data)
+    
     # Create a CloudField object
-    cloud_field = CloudField(l_data, u_data, v_data, w_data, p_data, theta_l_data, q_t_data, timestep, config, xt, yt, zt)
+    cloud_field = CloudField(l_data, u_data, v_data, w_data, p_data, theta_l_data, q_t_data, r_data, timestep, config, xt, yt, zt)
     
     # Explicitly clear variables to help garbage collection
-    del l_data, u_data, v_data, p_data, theta_l_data, q_t_data, w_data
+    del l_data, u_data, v_data, p_data, theta_l_data, q_t_data, w_data, r_data
     
     gc.collect()  # Force garbage collection
     

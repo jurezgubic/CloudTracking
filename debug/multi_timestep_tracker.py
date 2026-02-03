@@ -347,7 +347,8 @@ def main():
     base_file_path = '/Users/jure/PhD/coding/RICO_1hr/'
     file_name = {
         'l': 'rico.l.nc', 'u': 'rico.u.nc', 'v': 'rico.v.nc',
-        'w': 'rico.w.nc', 'p': 'rico.p.nc', 't': 'rico.t.nc', 'q': 'rico.q.nc'
+        'w': 'rico.w.nc', 'p': 'rico.p.nc', 't': 'rico.t.nc', 'q': 'rico.q.nc',
+        'r': 'rico.r.nc'  # Rain water mixing ratio (optional)
     }
     config = {
         'min_size': 10, 'l_condition': 0.001, 'w_condition': 0.0,

@@ -11,7 +11,7 @@ import utils.constants as const
 
 class CloudField:
     """Class to identify and track clouds in a labeled data field."""
-    def __init__(self, l_data, u_data, v_data, w_data, p_data, theta_l_data, q_t_data, timestep, config, xt, yt, zt):
+    def __init__(self, l_data, u_data, v_data, w_data, p_data, theta_l_data, q_t_data, r_data, timestep, config, xt, yt, zt):
         self.timestep = timestep
         self.distance_threshold = config['distance_threshold']
         self.xt = xt
@@ -34,7 +34,7 @@ class CloudField:
 
         # Calculate environment mass flux before creating cloud objects
         self.env_mass_flux_per_level = self._calculate_environment_mass_flux(
-            updated_labeled_array, p_data, theta_l_data, l_data, q_t_data, w_data, config
+            updated_labeled_array, p_data, theta_l_data, l_data, q_t_data, r_data, w_data, config
         )
 
         # Calculate domain mean profiles for environment aloft analysis
@@ -43,7 +43,7 @@ class CloudField:
 
         # create cloud data from updated labeled array
         self.clouds = self.create_clouds_from_labeled_array(
-            updated_labeled_array, l_data, u_data, v_data, w_data, p_data, theta_l_data, q_t_data, config, xt, yt, zt)
+            updated_labeled_array, l_data, u_data, v_data, w_data, p_data, theta_l_data, q_t_data, r_data, config, xt, yt, zt)
 
         # plot the updated labeled clouds if plot_switch is True
         if config['plot_switch'] == True:
@@ -71,7 +71,7 @@ class CloudField:
     # Instantaneous environment mass flux
     # ---------------------------
 
-    def _calculate_environment_mass_flux(self, labeled_array, p_data, theta_l_data, l_data, q_t_data, w_data, config):
+    def _calculate_environment_mass_flux(self, labeled_array, p_data, theta_l_data, l_data, q_t_data, r_data, w_data, config):
         """Calculate mass flux and baseline densities for the environment at each level."""
         print("Calculating environment mass flux...")
         env_mask = labeled_array == 0
@@ -90,9 +90,10 @@ class CloudField:
         theta_l_values_env = theta_l_data[env_mask]
         l_values_env = l_data[env_mask]
         q_t_values_env = q_t_data[env_mask]
+        r_values_env = r_data[env_mask]
         w_values_env = w_data[env_mask]
 
-        # Note: RICO data water species (l, q) are already in kg/kg (metadata labels g/kg incorrectly)
+        # Note: RICO data water species (l, q, r) are already in kg/kg (metadata labels g/kg incorrectly)
         q_l_values_env = l_values_env
         q_v_values_env = q_t_values_env - q_l_values_env
 
@@ -105,17 +106,21 @@ class CloudField:
             q_l_values_env = q_l_values_env.filled(np.nan)
         if hasattr(q_v_values_env, 'filled'):
             q_v_values_env = q_v_values_env.filled(np.nan)
+        if hasattr(r_values_env, 'filled'):
+            r_values_env = r_values_env.filled(np.nan)
         if hasattr(w_values_env, 'filled'):
             w_values_env = w_values_env.filled(np.nan)
 
         # Reuse the existing physics function to get densities and mass flux for each point
+        # Rain is excluded from saturation adjustment but included in density loading
         _, rhos_env, mass_fluxes_env = calculate_physics_variables(
             p_values_env,
             theta_l_values_env,
             q_l_values_env,
             q_v_values_env,
             w_values_env,
-            config['horizontal_resolution']**2
+            config['horizontal_resolution']**2,
+            r_rain_values=r_values_env
         )
 
         # Sum the mass fluxes per level using the z-indices
@@ -219,7 +224,7 @@ class CloudField:
         return labeled_array
 
     # @profile
-    def create_clouds_from_labeled_array(self, updated_labeled_array, l_data, u_data, v_data, w_data, p_data, theta_l_data, q_t_data, config, xt, yt, zt):
+    def create_clouds_from_labeled_array(self, updated_labeled_array, l_data, u_data, v_data, w_data, p_data, theta_l_data, q_t_data, r_data, config, xt, yt, zt):
         """Create Cloud objects from the updated labeled array with optimized performance."""
         print("Creating cloud data from labeled array...")
 
@@ -362,6 +367,7 @@ class CloudField:
                     theta_l_values = theta_l_data[point_indices[:, 0], point_indices[:, 1], point_indices[:, 2]]
                     # Note: RICO data already in kg/kg (metadata labels g/kg incorrectly)
                     q_t_values = q_t_data[point_indices[:, 0], point_indices[:, 1], point_indices[:, 2]]
+                    r_values = r_data[point_indices[:, 0], point_indices[:, 1], point_indices[:, 2]]
                     q_l_values = l_values
                     q_v_values = q_t_values - q_l_values
 
@@ -374,6 +380,8 @@ class CloudField:
                         q_l_values = q_l_values.filled(np.nan)
                     if hasattr(q_v_values, 'filled'):
                         q_v_values = q_v_values.filled(np.nan)
+                    if hasattr(r_values, 'filled'):
+                        r_values = r_values.filled(np.nan)
                     if hasattr(w_values, 'filled'):
                         w_values = w_values.filled(np.nan)
                     
@@ -409,9 +417,11 @@ class CloudField:
                     ql_flux = np.sum(w_values * l_values)
                     
                     # Use Numba to accelerate physics calculations
+                    # Rain is excluded from saturation adjustment but included in density loading
                     temps, rhos, mass_fluxes = calculate_physics_variables(
                         p_values, theta_l_values, q_l_values, q_v_values, 
-                        w_values, horizontal_resolution_squared
+                        w_values, horizontal_resolution_squared,
+                        r_rain_values=r_values
                     )
                     
                     # Pre-allocate arrays for per-level data
@@ -759,6 +769,7 @@ class CloudField:
                                 p_z = p_data[z_level_idx]
                                 t_z = theta_l_data[z_level_idx]
                                 qt_z = q_t_data[z_level_idx]
+                                r_z = r_data[z_level_idx]
 
                                 # Handle masked arrays
                                 if hasattr(w_z, 'filled'):
@@ -771,6 +782,8 @@ class CloudField:
                                     t_z = t_z.filled(np.nan)
                                 if hasattr(qt_z, 'filled'):
                                     qt_z = qt_z.filled(np.nan)
+                                if hasattr(r_z, 'filled'):
+                                    r_z = r_z.filled(np.nan)
 
                                 # Compute qv in same units as inputs for output; also kg/kg for physics
                                 qv_z = qt_z - l_z
@@ -792,9 +805,11 @@ class CloudField:
                                 p_ring = p_z[ring_env]
                                 t_ring = t_z[ring_env]
                                 w_ring = w_z[ring_env]
+                                r_ring = r_z[ring_env]
                                 _, rhos_ring, _ = calculate_physics_variables(
                                     p_ring, t_ring, ql_ring, qv_ring, w_ring,
-                                    horizontal_resolution_squared
+                                    horizontal_resolution_squared,
+                                    r_rain_values=r_ring
                                 )
                                 rho0 = rho_env_mean[z_level_idx] if rho_env_mean is not None else np.nan
                                 if np.isfinite(rho0) and np.any(np.isfinite(rhos_ring)):

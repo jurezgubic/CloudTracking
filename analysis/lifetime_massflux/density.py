@@ -51,6 +51,7 @@ def compute_rho0_from_raw(
             'q': 'rico.q.nc',
             'p': 'rico.p.nc',
             't': 'rico.t.nc',
+            'r': 'rico.r.nc',  # Rain water mixing ratio (optional)
         }
 
     try:
@@ -58,6 +59,13 @@ def compute_rho0_from_raw(
         ds_q = xr.open_dataset(f"{base_path.rstrip('/')}/{file_map['q']}")
         ds_p = xr.open_dataset(f"{base_path.rstrip('/')}/{file_map['p']}")
         ds_t = xr.open_dataset(f"{base_path.rstrip('/')}/{file_map['t']}")
+        # Rain file is optional - use zeros if not present
+        ds_r = None
+        if 'r' in file_map:
+            try:
+                ds_r = xr.open_dataset(f"{base_path.rstrip('/')}/{file_map['r']}")
+            except (FileNotFoundError, OSError):
+                print(f"[compute_rho0_from_raw] rain file not found, using zeros for rain water.")
     except Exception as e:
         print(f"[compute_rho0_from_raw] could not open raw files at {base_path}: {e}")
         return None
@@ -73,10 +81,12 @@ def compute_rho0_from_raw(
         print(f"[compute_rho0_from_raw] missing var '{prefer}' in dataset; vars={list(ds.data_vars.keys())}")
         return None
 
-    l_gpkg = _var(ds_l, 'l')            # g/kg
-    q_gpkg = _var(ds_q, 'q')            # g/kg
+    l_gpkg = _var(ds_l, 'l')            # g/kg (actually kg/kg)
+    q_gpkg = _var(ds_q, 'q')            # g/kg (actually kg/kg)
     p = _var(ds_p, 'p')                 # Pa
     theta_l = _var(ds_t, 't', 'theta_l')# K
+    # Rain is optional - use zeros if not loaded
+    r_gpkg = _var(ds_r, 'r') if ds_r is not None else None
 
     # Normalize dim names so later reduction uses 'time' and 'z'
     def _normalize_dims(da: xr.DataArray) -> xr.DataArray:
@@ -100,6 +110,8 @@ def compute_rho0_from_raw(
     q_gpkg = _normalize_dims(q_gpkg)
     p = _normalize_dims(p)
     theta_l = _normalize_dims(theta_l)
+    if r_gpkg is not None:
+        r_gpkg = _normalize_dims(r_gpkg)
 
     # Optionally limit time indices
     if time_indices is not None:
@@ -107,11 +119,15 @@ def compute_rho0_from_raw(
         q_gpkg = q_gpkg.isel(time=time_indices)
         p = p.isel(time=time_indices)
         theta_l = theta_l.isel(time=time_indices)
+        if r_gpkg is not None:
+            r_gpkg = r_gpkg.isel(time=time_indices)
     elif time_max is not None and 'time' in l_gpkg.dims:
         l_gpkg = l_gpkg.isel(time=slice(0, int(time_max)))
         q_gpkg = q_gpkg.isel(time=slice(0, int(time_max)))
         p = p.isel(time=slice(0, int(time_max)))
         theta_l = theta_l.isel(time=slice(0, int(time_max)))
+        if r_gpkg is not None:
+            r_gpkg = r_gpkg.isel(time=slice(0, int(time_max)))
 
     # Optionally subsample horizontal dims to speed up
     if sample_frac < 1.0:
@@ -139,13 +155,17 @@ def compute_rho0_from_raw(
                 q_gpkg = q_gpkg.isel(**{d: indexers[d] for d in q_gpkg.dims if d in indexers})
                 p = p.isel(**{d: indexers[d] for d in p.dims if d in indexers})
                 theta_l = theta_l.isel(**{d: indexers[d] for d in theta_l.dims if d in indexers})
+                if r_gpkg is not None:
+                    r_gpkg = r_gpkg.isel(**{d: indexers[d] for d in r_gpkg.dims if d in indexers})
             except Exception as e:
                 print(f"[compute_rho0_from_raw] subsample apply failed: {e}")
 
-    # Note: RICO data water species (l, q) are already in kg/kg despite metadata saying g/kg
+    # Note: RICO data water species (l, q, r) are already in kg/kg despite metadata saying g/kg
     q_l = l_gpkg.astype('float64')
     q_t = q_gpkg.astype('float64')
     q_v = q_t - q_l
+    # Rain: use zeros if not loaded
+    q_r = r_gpkg.astype('float64') if r_gpkg is not None else xr.zeros_like(q_l)
 
     # Constants
     R_d = 287.04
@@ -166,8 +186,9 @@ def compute_rho0_from_raw(
     Pi = (p / p_0) ** kappa
     T = theta_l * Pi
     
-    # Virtual temperature approach for density (includes vapor buoyancy and liquid loading)
-    r_total = q_v + q_l
+    # Virtual temperature approach for density (includes vapor buoyancy and hydrometeor loading)
+    # Rain is excluded from saturation adjustment but included in loading
+    r_total = q_v + q_l + q_r
     T_v = T * (1.0 + q_v / epsilon) / (1.0 + r_total)
     rho = p / (R_d * T_v)
 

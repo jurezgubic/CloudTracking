@@ -25,10 +25,11 @@ file_name = {
     'p': 'rico.p.nc',  # Pressure
     't': 'rico.t.nc',  # Liquid Water Potential temperature
     'q': 'rico.q.nc',  # Total water mixing ratio
+    'r': 'rico.r.nc',  # Rain water mixing ratio (optional - zeros if missing)
 }
 
 # Processing Options
-total_timesteps = 7 # Number of timesteps to process
+total_timesteps = 4 # Number of timesteps to process
 
 # Cloud Definition and Tracking Configuration
 config = {

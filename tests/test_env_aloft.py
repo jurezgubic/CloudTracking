@@ -36,6 +36,7 @@ class TestEnvAloft(unittest.TestCase):
         self.p_data = np.full((self.nz, self.ny, self.nx), 100000.0)
         self.theta_l_data = np.full((self.nz, self.ny, self.nx), 300.0)
         self.q_t_data = np.zeros((self.nz, self.ny, self.nx))
+        self.r_data = np.zeros((self.nz, self.ny, self.nx))  # Rain water mixing ratio
         
         # Note: RICO LES data water species are in kg/kg (not g/kg as metadata labels)
         # Tests use small values appropriate for kg/kg units
@@ -83,7 +84,7 @@ class TestEnvAloft(unittest.TestCase):
         timestep = 0
         cf = CloudField(
             self.l_data, self.u_data, self.v_data, self.w_data, 
-            self.p_data, self.theta_l_data, self.q_t_data, 
+            self.p_data, self.theta_l_data, self.q_t_data, self.r_data,
             timestep, self.config, self.xt, self.yt, self.zt
         )
         
@@ -142,7 +143,7 @@ class TestEnvAloft(unittest.TestCase):
         timestep = 0
         cf = CloudField(
             self.l_data, self.u_data, self.v_data, self.w_data, 
-            self.p_data, self.theta_l_data, self.q_t_data, 
+            self.p_data, self.theta_l_data, self.q_t_data, self.r_data,
             timestep, self.config, self.xt, self.yt, self.zt
         )
         
