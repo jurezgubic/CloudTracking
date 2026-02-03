@@ -11,8 +11,9 @@ from lib.cloud import Cloud
 
 class MockCloudField:
     """Simple mock of CloudField for testing"""
-    def __init__(self, clouds_dict):
+    def __init__(self, clouds_dict, timestep=0):
         self.clouds = clouds_dict
+        self.timestep = timestep
 
 class TestCloudMergeAge(unittest.TestCase):
     """Test that merged clouds inherit the age of the oldest parent"""
@@ -25,13 +26,18 @@ class TestCloudMergeAge(unittest.TestCase):
             'horizontal_resolution': 25.0,
             'switch_wind_drift': False,
             'switch_background_drift': False,
-            'switch_vertical_drift': False
+            'switch_vertical_drift': False,
+            'max_expected_cloud_speed': 20.0,
+            'bounding_box_safety_factor': 2.0,
+            'use_pre_filtering': False,  # Disable pre-filtering for simpler tests
         }
         
-        # Create mock height levels
+        # Create mock height and horizontal levels
         self.zt = np.array([0, 100, 200, 300, 400, 500])
+        self.xt = np.arange(0, 500, 25.0)  # x coordinates
+        self.yt = np.arange(0, 500, 25.0)  # y coordinates
         
-        # Create mean velocities (all zeros for simplicity)
+        # Create mean velocities for Cloud constructor
         self.mean_u = np.zeros_like(self.zt)
         self.mean_v = np.zeros_like(self.zt)
         self.mean_w = np.zeros_like(self.zt)
@@ -47,12 +53,17 @@ class TestCloudMergeAge(unittest.TestCase):
             size=10,
             surface_area=20,
             cloud_base_area=5,
+            cloud_base_height=200,
             location=(100, 100, 200),
             points=[(100, 100, 200), (101, 100, 200)],
+            surface_points=np.array([(100, 100, 200)]),
             timestep=0,
             max_height=200,
             max_w=1.0,
             max_w_cloud_base=0.5,
+            mean_u=self.mean_u,
+            mean_v=self.mean_v,
+            mean_w=self.mean_w,
             ql_flux=0.1,
             mass_flux=0.2,
             mass_flux_per_level=np.zeros_like(self.zt),
@@ -69,12 +80,17 @@ class TestCloudMergeAge(unittest.TestCase):
             size=8,
             surface_area=16,
             cloud_base_area=4,
+            cloud_base_height=220,
             location=(150, 150, 220),
             points=[(150, 150, 220), (151, 150, 220)],
+            surface_points=np.array([(150, 150, 220)]),
             timestep=0,
             max_height=220,
             max_w=1.2,
             max_w_cloud_base=0.6,
+            mean_u=self.mean_u,
+            mean_v=self.mean_v,
+            mean_w=self.mean_w,
             ql_flux=0.12,
             mass_flux=0.22,
             mass_flux_per_level=np.zeros_like(self.zt),
@@ -91,12 +107,17 @@ class TestCloudMergeAge(unittest.TestCase):
             size=6,
             surface_area=12,
             cloud_base_area=3,
+            cloud_base_height=210,
             location=(175, 175, 210),
             points=[(175, 175, 210), (176, 175, 210)],
+            surface_points=np.array([(175, 175, 210)]),
             timestep=0,
             max_height=210, 
             max_w=0.9,
             max_w_cloud_base=0.4,
+            mean_u=self.mean_u,
+            mean_v=self.mean_v,
+            mean_w=self.mean_w,
             ql_flux=0.08,
             mass_flux=0.18,
             mass_flux_per_level=np.zeros_like(self.zt),
@@ -112,7 +133,7 @@ class TestCloudMergeAge(unittest.TestCase):
         cloud_field1 = MockCloudField({1: cloud1, 2: cloud2, 3: cloud3})
         
         # Update tracker with the first cloud field
-        tracker.update_tracks(cloud_field1, self.mean_u, self.mean_v, self.mean_w, self.zt)
+        tracker.update_tracks(cloud_field1, self.zt, self.xt, self.yt)
         
         # TIMESTEP 2: Create a merged cloud
         merged_cloud = Cloud(
@@ -120,12 +141,17 @@ class TestCloudMergeAge(unittest.TestCase):
             size=24,  # Sum of the three original clouds
             surface_area=48,
             cloud_base_area=12,
+            cloud_base_height=230,
             location=(140, 140, 230),  # Somewhere in the middle
             points=[(140, 140, 230), (141, 140, 230)],
+            surface_points=np.array([(140, 140, 230)]),
             timestep=1,
             max_height=230,
             max_w=1.3,
             max_w_cloud_base=0.7,
+            mean_u=self.mean_u,
+            mean_v=self.mean_v,
+            mean_w=self.mean_w,
             ql_flux=0.13,
             mass_flux=0.23,
             mass_flux_per_level=np.zeros_like(self.zt),
@@ -142,7 +168,7 @@ class TestCloudMergeAge(unittest.TestCase):
         # Override is_match method to force the merge
         original_is_match = tracker.is_match
         
-        def mock_is_match(cloud, last_cloud_in_track):
+        def mock_is_match(cloud, last_cloud_in_track, current_cloud_field):
             # All three clouds should match with merged_cloud
             return True
         
@@ -150,7 +176,7 @@ class TestCloudMergeAge(unittest.TestCase):
         tracker.is_match = mock_is_match
         
         # Update tracker with the second cloud field
-        tracker.update_tracks(cloud_field2, self.mean_u, self.mean_v, self.mean_w, self.zt)
+        tracker.update_tracks(cloud_field2, self.zt, self.xt, self.yt)
         
         # Restore original is_match method
         tracker.is_match = original_is_match

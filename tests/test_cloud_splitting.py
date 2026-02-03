@@ -17,8 +17,9 @@ from lib.cloud import Cloud
 
 class MockCloudField:
     """Simple mock of CloudField for testing"""
-    def __init__(self, clouds_dict):
+    def __init__(self, clouds_dict, timestep=0):
         self.clouds = clouds_dict
+        self.timestep = timestep
 
 class TestCloudSplitting(unittest.TestCase):
     """Test the cloud splitting behavior in CloudTracker"""
@@ -31,7 +32,10 @@ class TestCloudSplitting(unittest.TestCase):
             'horizontal_resolution': 25.0,
             'switch_wind_drift': False,
             'switch_background_drift': False,
-            'switch_vertical_drift': False
+            'switch_vertical_drift': False,
+            'max_expected_cloud_speed': 20.0,
+            'bounding_box_safety_factor': 2.0,
+            'use_pre_filtering': False,  # Disable pre-filtering for simpler tests
         }
         
     def test_cloud_splitting(self):
@@ -41,8 +45,8 @@ class TestCloudSplitting(unittest.TestCase):
         
         # Create mock height levels
         zt = np.array([0, 100, 200, 300, 400, 500])
-        
-        # Create mean velocities (all zeros for simplicity)
+        xt = np.arange(0, 500, 25.0)  # x coordinates
+        yt = np.arange(0, 500, 25.0)  # y coordinates
         mean_u = np.zeros_like(zt)
         mean_v = np.zeros_like(zt)
         mean_w = np.zeros_like(zt)
@@ -53,12 +57,17 @@ class TestCloudSplitting(unittest.TestCase):
             size=10,
             surface_area=20,
             cloud_base_area=5,
+            cloud_base_height=200,
             location=(100, 100, 200),
             points=[(100, 100, 200), (101, 100, 200), (100, 101, 200), (101, 101, 200)],
+            surface_points=np.array([(100, 100, 200)]),
             timestep=0,
             max_height=200,
             max_w=1.0,
             max_w_cloud_base=0.5,
+            mean_u=mean_u,
+            mean_v=mean_v,
+            mean_w=mean_w,
             ql_flux=0.1,
             mass_flux=0.2,
             mass_flux_per_level=np.zeros_like(zt),
@@ -73,7 +82,7 @@ class TestCloudSplitting(unittest.TestCase):
         cloud_field1 = MockCloudField({1: cloud1})
         
         # Update tracker with the first cloud field
-        tracker.update_tracks(cloud_field1, mean_u, mean_v, mean_w, zt)
+        tracker.update_tracks(cloud_field1, zt, xt, yt)
         
         # TIMESTEP 2: Create split clouds and a new cloud
         # First split fragment (close to original cloud)
@@ -82,12 +91,17 @@ class TestCloudSplitting(unittest.TestCase):
             size=6,
             surface_area=12,
             cloud_base_area=3,
+            cloud_base_height=210,
             location=(102, 102, 210),
             points=[(102, 102, 210), (103, 102, 210)],
+            surface_points=np.array([(102, 102, 210)]),
             timestep=1,
             max_height=210,
             max_w=1.1,
             max_w_cloud_base=0.6,
+            mean_u=mean_u,
+            mean_v=mean_v,
+            mean_w=mean_w,
             ql_flux=0.11,
             mass_flux=0.21,
             mass_flux_per_level=np.zeros_like(zt),
@@ -104,12 +118,17 @@ class TestCloudSplitting(unittest.TestCase):
             size=4,
             surface_area=8,
             cloud_base_area=2,
+            cloud_base_height=205,
             location=(97, 99, 205),
             points=[(97, 99, 205), (98, 99, 205)],
+            surface_points=np.array([(97, 99, 205)]),
             timestep=1,
             max_height=205,
             max_w=0.9,
             max_w_cloud_base=0.4,
+            mean_u=mean_u,
+            mean_v=mean_v,
+            mean_w=mean_w,
             ql_flux=0.09,
             mass_flux=0.19,
             mass_flux_per_level=np.zeros_like(zt),
@@ -126,12 +145,17 @@ class TestCloudSplitting(unittest.TestCase):
             size=8,
             surface_area=16,
             cloud_base_area=4,
+            cloud_base_height=250,
             location=(300, 300, 250),
             points=[(300, 300, 250), (301, 300, 250)],
+            surface_points=np.array([(300, 300, 250)]),
             timestep=1,
             max_height=250,
             max_w=1.2,
             max_w_cloud_base=0.7,
+            mean_u=mean_u,
+            mean_v=mean_v,
+            mean_w=mean_w,
             ql_flux=0.12,
             mass_flux=0.22,
             mass_flux_per_level=np.zeros_like(zt),
@@ -149,7 +173,7 @@ class TestCloudSplitting(unittest.TestCase):
         # This simulates the spatial proximity matching without the complexity
         original_is_match = tracker.is_match
         
-        def mock_is_match(cloud, last_cloud_in_track):
+        def mock_is_match(cloud, last_cloud_in_track, current_cloud_field):
             # Cloud2 and Cloud3 should match with Cloud1
             # Cloud4 should not match with any previous cloud
             if last_cloud_in_track.cloud_id == 1 and cloud.cloud_id in [2, 3]:
@@ -160,7 +184,7 @@ class TestCloudSplitting(unittest.TestCase):
         tracker.is_match = mock_is_match
         
         # Update tracker with the second cloud field
-        tracker.update_tracks(cloud_field2, mean_u, mean_v, mean_w, zt)
+        tracker.update_tracks(cloud_field2, zt, xt, yt)
         
         # Restore original is_match method
         tracker.is_match = original_is_match
