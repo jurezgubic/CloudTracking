@@ -14,81 +14,65 @@ import numpy as np
 from netCDF4 import Dataset
 
 # Warning!
-# User needs to modify: data paths, output_netcdf_path, total_timesteps, and config
-
-# =============================================================================
-# DATA FORMAT SELECTION
-# =============================================================================
-# Set 'data_format' to either 'UCLA-LES' (RICO, DALES) or 'MONC' (LBA, RCE)
-
-DATA_FORMAT = 'UCLA-LES'  # Options: 'UCLA-LES' or 'MONC'
-
-# =============================================================================
-# UCLA-LES / DALES Configuration (RICO example)
-# =============================================================================
-# Used when DATA_FORMAT = 'UCLA-LES'
-
-base_file_path = '/Users/jure/PhD/coding/RICO_1hr/'
-output_netcdf_path = 'cloud_results.nc'
-
-# paths to the LES data files (one file per variable, all timesteps in each)
-file_name = {
-    'l': 'rico.l.nc',  # Liquid water mixing ratio
-    'u': 'rico.u.nc',  # u wind
-    'v': 'rico.v.nc',  # v wind
-    'w': 'rico.w.nc',  # w wind (vertical velocity)
-    'p': 'rico.p.nc',  # Pressure
-    't': 'rico.t.nc',  # Liquid Water Potential temperature
-    'q': 'rico.q.nc',  # Total water mixing ratio
-    'r': 'rico.r.nc',  # Rain water mixing ratio (optional - zeros if missing)
-}
-
-# =============================================================================
-# MONC Configuration (LBA example)
-# =============================================================================
-# Used when DATA_FORMAT = 'MONC'
-# Each timestep is in a separate file: 3dfields_ts_{time}.nc
-
-monc_data_path = '/path/to/monc/output/'           # Directory with 3dfields_ts_*.nc files
-monc_config_file = '/path/to/lba_config.mcf'       # MONC configuration file
-monc_file_pattern = '3dfields_ts_{time}.nc'        # File naming pattern
-monc_output_netcdf_path = 'cloud_results_monc.nc'  # Output file for MONC runs
+# User needs to modify: config (especially data paths), output_netcdf_path, total_timesteps
 
 # =============================================================================
 # Processing Options
 # =============================================================================
-total_timesteps = 4  # Number of timesteps to process (set to -1 to process all available)
+output_netcdf_path = 'cloud_results_lba.nc'
+total_timesteps = 15  # Number of timesteps to process (set to -1 to process all available)
 
 # =============================================================================
 # Cloud Definition and Tracking Configuration
 # =============================================================================
 config = {
-    # Data format selection (set at top of file)
-    'data_format': DATA_FORMAT,
+    # =========================================================================
+    # DATA FORMAT SELECTION
+    # =========================================================================
+    # 'data_format': 'UCLA-LES' or 'MONC'
+    #   - UCLA-LES: One file per variable, all timesteps in each (e.g., RICO, DALES)
+    #   - MONC: One file per timestep, all variables in each (e.g., LBA, RCE)
+    'data_format': 'MONC',
     
+    # =========================================================================
     # UCLA-LES specific paths (used when data_format='UCLA-LES')
-    'base_file_path': base_file_path,
-    'file_name': file_name,
+    # =========================================================================
+    # base_file_path: Directory containing variable files
+    # file_name: Dict mapping variable names to filenames
+    'base_file_path': '/Users/jure/PhD/coding/RICO_1hr/',
+    'file_name': {
+        'l': 'rico.l.nc',  # Liquid water mixing ratio
+        'u': 'rico.u.nc',  # u wind
+        'v': 'rico.v.nc',  # v wind
+        'w': 'rico.w.nc',  # w wind (vertical velocity)
+        'p': 'rico.p.nc',  # Pressure
+        't': 'rico.t.nc',  # Liquid Water Potential temperature
+        'q': 'rico.q.nc',  # Total water mixing ratio
+        'r': 'rico.r.nc',  # Rain water mixing ratio (optional)
+    },
     
+    # =========================================================================
     # MONC specific paths (used when data_format='MONC')
-    'monc_data_path': monc_data_path,
-    'monc_config_file': monc_config_file,
-    'monc_file_pattern': monc_file_pattern,
+    # =========================================================================
+    # Each timestep is in a separate file: 3dfields_ts_{time}.nc
+    'monc_data_path': '/Users/jure/PhD/coding/LBA_sample_data/jun10',
+    'monc_config_file': '/Users/jure/PhD/coding/LBA_sample_data/jun10/lba_config.mcf',
+    'monc_file_pattern': '3dfields_ts_{time}.nc',
     
     # Cloud identification
     'min_size': 10,              # Minimum number of points for a cloud to be considered a cloud
-    'l_condition': 0.001,        # kg/kg. Minimum liquid water content for a point to be a cloud.
+    'l_condition': 1e-4,         # kg/kg. Minimum liquid water content for a point to be a cloud.
     'w_condition': 0.0,          # m/s. Minimum vertical velocity for a point to be part of a cloud.
     'w_switch': False,           # If True, apply the 'w_condition' threshold.
     
     # Simulation parameters
-    'timestep_duration': 60,     # Seconds. Time between timesteps.
-    'horizontal_resolution': 25.0, # m. Grid resolution from the simulation namelist.
+    'timestep_duration': 180,    # Seconds. Time between timesteps. (LBA: 180s, RICO: 60s)
+    'horizontal_resolution': 200.0, # m. Grid resolution (LBA: 200m, RICO: 25m). Auto-updated from adapter.
 
     # Physics-based Adjustments
     'switch_wind_drift': True,   # If True, consider the mean horizontal motion in tracking.
     'switch_vertical_drift': True, # If True, consider the mean vertical motion in tracking.
-    'cloud_base_altitude': 650,  # m. Estimated cloud base altitude for certain calculations
+    'cloud_base_altitude': 1000,  # m. Estimated cloud base altitude for certain calculations
 
     # Matching parameters
     'distance_threshold': 0,     # Max distance between merging clouds across a periodic boundary.
@@ -130,10 +114,6 @@ config = {
     # Performance tuning
     'cloud_batch_size': 50,       # Number of clouds to process before forcing garbage collection
 }
-
-# Select output path based on data format
-if DATA_FORMAT == 'MONC':
-    output_netcdf_path = monc_output_netcdf_path
 
 # =============================================================================
 # End of user modifiable parameters

@@ -116,7 +116,7 @@ class MONCAdapter(BaseDataAdapter):
         """Discover available MONC output files and extract timesteps."""
         # Convert pattern to glob pattern
         glob_pattern = self.file_pattern.replace('{time}', '*')
-        files = sorted(glob.glob(str(self.data_path / glob_pattern)))
+        files = glob.glob(str(self.data_path / glob_pattern))
         
         if not files:
             raise FileNotFoundError(
@@ -126,8 +126,7 @@ class MONCAdapter(BaseDataAdapter):
         
         # Extract timesteps from filenames
         # Pattern: 3dfields_ts_{time}.nc
-        self._files: List[Path] = []
-        self._times: List[float] = []
+        file_time_pairs: List[Tuple[Path, float]] = []
         
         # Build regex from pattern
         regex_pattern = self.file_pattern.replace('{time}', r'(\d+)')
@@ -138,10 +137,13 @@ class MONCAdapter(BaseDataAdapter):
             match = regex.match(filename)
             if match:
                 time_val = float(match.group(1))
-                self._files.append(Path(f))
-                self._times.append(time_val)
+                file_time_pairs.append((Path(f), time_val))
         
-        self._times = np.array(self._times)
+        # Sort by time (not alphabetically!)
+        file_time_pairs.sort(key=lambda x: x[1])
+        
+        self._files = [p[0] for p in file_time_pairs]
+        self._times = np.array([p[1] for p in file_time_pairs])
         
         print(f"  Found {len(self._files)} MONC output files")
         print(f"  Time range: [{self._times.min():.0f}, {self._times.max():.0f}] seconds")
