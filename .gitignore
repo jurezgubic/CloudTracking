@@ -9,6 +9,9 @@ __pycache__/
 # Github copilot instructions
 .github/
 
+# Claude Code instructions (local only)
+CLAUDE.md
+
 # All analysis results
 analysis_output/
 cloud_surface_visualizations/
