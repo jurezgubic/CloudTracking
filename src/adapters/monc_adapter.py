@@ -329,12 +329,11 @@ class MONCAdapter(BaseDataAdapter):
         # thref is 1D, broadcast over x,y
         theta = th_pert + self._thref_on_grid[np.newaxis, np.newaxis, :]
         
-        # 2. Use reference pressure (perturbation is small for anelastic)
-        # For more accuracy, could add p_pert, but it's typically << pref
-        p = np.broadcast_to(
-            self._pref_on_grid[np.newaxis, np.newaxis, :],
-            theta.shape
-        ).copy()  # Make writeable copy
+        # 2. Full pressure = hydrostatic reference + non-hydrostatic perturbation
+        # p_pert from the anelastic solver is small (~0.5% of pref at cloud levels)
+        # but includes the hydrostatic drift as the atmosphere evolves from its
+        # initial reference state, so we add it for correctness.
+        p = self._pref_on_grid[np.newaxis, np.newaxis, :] + p_pert
         
         # 3. Convert theta to theta_l (liquid water potential temperature)
         # theta_l = theta - (L_v / c_pd) * (q_l / Pi)
