@@ -19,8 +19,8 @@ from netCDF4 import Dataset
 # =============================================================================
 # Processing Options
 # =============================================================================
-output_netcdf_path = 'cloud_results_lba.nc'
-total_timesteps = 15  # Number of timesteps to process (set to -1 to process all available)
+output_netcdf_path = 'cloud_results.nc'
+total_timesteps = 5  # Number of timesteps to process (set to -1 to process all available)
 
 # =============================================================================
 # Cloud Definition and Tracking Configuration
@@ -32,7 +32,7 @@ config = {
     # 'data_format': 'UCLA-LES' or 'MONC'
     #   - UCLA-LES: One file per variable, all timesteps in each (e.g., RICO, DALES)
     #   - MONC: One file per timestep, all variables in each (e.g., LBA, RCE)
-    'data_format': 'MONC',
+    'data_format': 'UCLA-LES',
     
     # =========================================================================
     # UCLA-LES specific paths (used when data_format='UCLA-LES')
@@ -61,18 +61,18 @@ config = {
     
     # Cloud identification
     'min_size': 10,              # Minimum number of points for a cloud to be considered a cloud
-    'l_condition': 1e-4,         # kg/kg. Minimum liquid water content for a point to be a cloud.
+    'l_condition': 1e-3,         # kg/kg. Minimum liquid water content for a point to be a cloud.
     'w_condition': 0.0,          # m/s. Minimum vertical velocity for a point to be part of a cloud.
     'w_switch': False,           # If True, apply the 'w_condition' threshold.
     
     # Simulation parameters
-    'timestep_duration': 180,    # Seconds. Time between timesteps. (LBA: 180s, RICO: 60s)
-    'horizontal_resolution': 200.0, # m. Grid resolution (LBA: 200m, RICO: 25m). Auto-updated from adapter.
+    'timestep_duration': 60,    # Seconds. Time between timesteps. (LBA: 180s, RICO: 60s)
+    'horizontal_resolution': 25.0, # m. Grid resolution (LBA: 200m, RICO: 25m). Auto-updated from adapter.
 
     # Physics-based Adjustments
     'switch_wind_drift': True,   # If True, consider the mean horizontal motion in tracking.
     'switch_vertical_drift': True, # If True, consider the mean vertical motion in tracking.
-    'cloud_base_altitude': 1000,  # m. Estimated cloud base altitude for certain calculations
+    'cloud_base_altitude': 700,  # m. Estimated cloud base altitude for certain calculations
 
     # Matching parameters
     'distance_threshold': 0,     # Max distance between merging clouds across a periodic boundary.
@@ -242,15 +242,16 @@ def process_clouds(cloud_tracker, adapter, num_timesteps):
 
         # Write cloud track information to NetCDF
         write_cloud_tracks_to_netcdf(
-            cloud_tracker.get_tracks(), 
+            cloud_tracker.get_tracks(),
             cloud_tracker.track_id_to_index,
             cloud_tracker.tainted_tracks,
-            cloud_field.env_mass_flux_per_level, 
-            output_netcdf_path, 
-            timestep, 
+            cloud_field.env_mass_flux_per_level,
+            output_netcdf_path,
+            timestep,
             cloud_field.zt,
             config.get('env_ring_max_distance', 3),
-            env_aloft_levels=config.get('env_aloft_levels', 40)
+            env_aloft_levels=config.get('env_aloft_levels', 40),
+            config=config
         )
 
         gc.collect()
@@ -279,12 +280,13 @@ def process_clouds(cloud_tracker, adapter, num_timesteps):
         cloud_tracker.get_tracks(),
         cloud_tracker.track_id_to_index,
         cloud_tracker.tainted_tracks,
-        cloud_field.env_mass_flux_per_level, 
-        output_netcdf_path, 
-        num_timesteps - 1, 
+        cloud_field.env_mass_flux_per_level,
+        output_netcdf_path,
+        num_timesteps - 1,
         cloud_field.zt,
         config.get('env_ring_max_distance', 3),
-        env_aloft_levels=config.get('env_aloft_levels', 40)
+        env_aloft_levels=config.get('env_aloft_levels', 40),
+        config=config
     )
 
 

@@ -1,11 +1,42 @@
 from netCDF4 import Dataset
 import numpy as np
 import os
+import json
+from datetime import datetime, timezone
 
-def initialize_netcdf(file_path, zt, ring_count, env_aloft_levels=40):
+
+def _numpy_default(obj):
+    """JSON serializer for NumPy types."""
+    if isinstance(obj, np.ndarray):
+        return obj.tolist()
+    if isinstance(obj, (np.integer,)):
+        return int(obj)
+    if isinstance(obj, (np.floating,)):
+        return float(obj)
+    raise TypeError(f"Object of type {type(obj)} is not JSON serializable")
+
+
+def _write_config_attributes(root_grp, config):
+    """Write run configuration as NetCDF global attributes for reproducibility."""
+    root_grp.run_timestamp = datetime.now(timezone.utc).isoformat()
+
+    for key, value in config.items():
+        if isinstance(value, bool):
+            root_grp.setncattr(key, int(value))
+        elif isinstance(value, (str, int, float)):
+            root_grp.setncattr(key, value)
+        elif value is None:
+            root_grp.setncattr(key, "None")
+        else:
+            root_grp.setncattr(key, json.dumps(value, default=_numpy_default))
+
+
+def initialize_netcdf(file_path, zt, ring_count, env_aloft_levels=40, config=None):
     """Create a new NetCDF file with necessary dimensions and variables for cloud tracking data."""
     # Create the file and define dimensions and variables
     with Dataset(file_path, 'w', format='NETCDF4') as root_grp:
+        if config is not None:
+            _write_config_attributes(root_grp, config)
         root_grp.createDimension('track', 100000)  # Fixed large number of tracks
         root_grp.createDimension('time', None)  # Unlimited time dimension
         #root_grp.createDimension('point', 100000)  # Static dimension for cloud points Warning: Not in use, crude test remnant!
@@ -92,7 +123,7 @@ def initialize_netcdf(file_path, zt, ring_count, env_aloft_levels=40):
         root_grp.createVariable('env_aloft_rh_std', 'f4', ('track', 'time', 'height_aloft'), fill_value=np.nan)
 
 
-def write_cloud_tracks_to_netcdf(tracks, track_id_to_index, tainted_tracks, env_mass_flux_per_level, file_path, timestep, zt, ring_count, env_aloft_levels=40):
+def write_cloud_tracks_to_netcdf(tracks, track_id_to_index, tainted_tracks, env_mass_flux_per_level, file_path, timestep, zt, ring_count, env_aloft_levels=40, config=None):
     """Write cloud tracking data (including environment rings) to NetCDF for a timestep."""
 
     if env_aloft_levels == -1:
@@ -100,7 +131,7 @@ def write_cloud_tracks_to_netcdf(tracks, track_id_to_index, tainted_tracks, env_
 
     # Create the file if it doesn't exist
     if not os.path.exists(file_path):
-        initialize_netcdf(file_path, zt, ring_count, env_aloft_levels)
+        initialize_netcdf(file_path, zt, ring_count, env_aloft_levels, config=config)
 
     # Write data for clouds at this timestep
     with Dataset(file_path, 'a') as root_grp:
