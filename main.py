@@ -20,7 +20,7 @@ from netCDF4 import Dataset
 # Processing Options
 # =============================================================================
 output_netcdf_path = 'cloud_results.nc'
-total_timesteps = 5  # Number of timesteps to process (set to -1 to process all available)
+total_timesteps = 3  # Number of timesteps to process (set to -1 to process all available)
 
 # =============================================================================
 # Cloud Definition and Tracking Configuration
@@ -64,7 +64,9 @@ config = {
     'l_condition': 1e-3,         # kg/kg. Minimum liquid water content for a point to be a cloud.
     'w_condition': 0.0,          # m/s. Minimum vertical velocity for a point to be part of a cloud.
     'w_switch': False,           # If True, apply the 'w_condition' threshold.
-    
+    'b_condition': 0.0,          # m/s^2. Minimum buoyancy for a cloud point (0 = positively buoyant).
+    'b_switch': False,           # If True, apply the 'b_condition' threshold.
+
     # Simulation parameters
     'timestep_duration': 60,    # Seconds. Time between timesteps. (LBA: 180s, RICO: 60s)
     'horizontal_resolution': 25.0, # m. Grid resolution (LBA: 200m, RICO: 25m). Auto-updated from adapter.

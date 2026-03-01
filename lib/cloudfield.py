@@ -5,7 +5,7 @@ from memory_profiler import profile
 from scipy.ndimage import binary_dilation, binary_erosion, generate_binary_structure
 from utils.plotting_utils import plot_labeled_regions
 from lib.cloud import Cloud
-from utils.physics import calculate_physics_variables, calculate_rh_and_temperature
+from utils.physics import calculate_physics_variables, calculate_rh_and_temperature, compute_buoyancy_3d
 from scipy.spatial import cKDTree
 import utils.constants as const
 
@@ -20,7 +20,12 @@ class CloudField:
         self.env_mass_flux_per_level = None
 
         # creates a labeled array of objects
-        labeled_array = self.identify_regions(l_data, w_data, config)
+        if config['b_switch']:
+            labeled_array = self.identify_regions(
+                l_data, w_data, config,
+                theta_l_data=theta_l_data, q_t_data=q_t_data, p_data=p_data, r_data=r_data)
+        else:
+            labeled_array = self.identify_regions(l_data, w_data, config)
 
         if config['plot_switch'] == True:
             plot_labeled_regions(
@@ -134,12 +139,14 @@ class CloudField:
         
         return env_mass_flux_per_level
 
-    def identify_regions(self, l_data, w_data, config):
+    def identify_regions(self, l_data, w_data, config, theta_l_data=None, q_t_data=None, p_data=None, r_data=None):
         """Identify cloudy regions in the labeled data."""
-        if config['w_switch'] == True:
-            condition = (l_data > config['l_condition']) & (w_data >= config['w_condition'])
-        else:
-            condition = l_data > config['l_condition']
+        condition = l_data > config['l_condition']
+        if config['w_switch']:
+            condition &= (w_data >= config['w_condition'])
+        if config['b_switch']:
+            buoyancy = compute_buoyancy_3d(theta_l_data, q_t_data, l_data, p_data, r=r_data)
+            condition &= (buoyancy >= config['b_condition'])
 
         # Label the regions
         labeled_array = measure.label(condition, connectivity=3)

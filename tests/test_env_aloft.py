@@ -17,6 +17,7 @@ class TestEnvAloft(unittest.TestCase):
         self.config = {
             'distance_threshold': 100.0,
             'w_switch': False,
+            'b_switch': False,
             'l_condition': 0.5,
             'min_size': 1,
             'horizontal_resolution': 25.0,

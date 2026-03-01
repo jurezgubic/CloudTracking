@@ -35,6 +35,26 @@ C_PV = 1850.0       # Specific heat of water vapor at constant pressure [J/kg/K]
 L_V = 2.5e6         # Latent heat of vaporization [J/kg]
 P_0 = 100000.0      # Reference pressure [Pa]
 EPSILON = 0.622     # Ratio of gas constants R_d/R_v (M_v/M_d)
+G = 9.81            # Gravitational acceleration [m/s^2]
+
+
+def compute_buoyancy_3d(theta_l, q_t, q_l, p, r=None):
+    """Compute buoyancy (m/s^2) relative to horizontal domain mean θ_v at each level.
+
+    Uses the LES-diagnosed q_l directly, so no saturation adjustment is needed.
+    Equivalent to the density-based buoyancy in _density_with_loading, but operates
+    on potential temperature rather than absolute temperature.
+
+    Water loading includes cloud liquid and (optionally) rain, consistent with
+    _density_with_loading.
+    """
+    exner = (p / P_0) ** (R_D / C_PD)
+    theta = theta_l + (L_V / (C_PD * exner)) * q_l
+    q_v = q_t - q_l
+    r_total = q_t if r is None else q_t + r
+    theta_v = theta * (1.0 + q_v / EPSILON) / (1.0 + r_total)
+    theta_v_mean = np.mean(theta_v, axis=(1, 2), keepdims=True)
+    return G * (theta_v - theta_v_mean) / theta_v_mean
 
 
 @numba.njit
