@@ -20,7 +20,7 @@ from netCDF4 import Dataset
 # Processing Options
 # =============================================================================
 output_netcdf_path = 'cloud_results.nc'
-total_timesteps = 3  # Number of timesteps to process (set to -1 to process all available)
+total_timesteps = 10  # Number of timesteps to process (set to -1 to process all available)
 
 # =============================================================================
 # Cloud Definition and Tracking Configuration
@@ -61,7 +61,7 @@ config = {
     
     # Cloud identification
     'min_size': 10,              # Minimum number of points for a cloud to be considered a cloud
-    'l_condition': 1e-3,         # kg/kg. Minimum liquid water content for a point to be a cloud.
+    'l_condition': 5e-4,         # kg/kg. Minimum liquid water content for a point to be a cloud.
     'w_condition': 0.0,          # m/s. Minimum vertical velocity for a point to be part of a cloud.
     'w_switch': False,           # If True, apply the 'w_condition' threshold.
     'b_condition': 0.0,          # m/s^2. Minimum buoyancy for a cloud point (0 = positively buoyant).

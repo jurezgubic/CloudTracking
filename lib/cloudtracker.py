@@ -73,45 +73,72 @@ class CloudTracker:
                             cloud_inheritance[cloud_id] = []
                         cloud_inheritance[cloud_id].append((last_cloud_in_track, track_id))
             
-            # SECOND PASS: Handle merges and splits with proper age inheritance
-            # Process merges first (clouds with multiple potential parents)
+            # SECOND PASS: Handle merges with constrained assignment.
+            # Each track may win at most one merge per timestep to prevent
+            # multiple clouds being appended to the same track.
             merge_candidates = {cid: parents for cid, parents in cloud_inheritance.items() if len(parents) > 1}
-            
-            for cloud_id, parent_list in merge_candidates.items():
+            committed_tracks = set()  # Tracks that already won a merge this timestep
+
+            # Sort merge clouds by number of parents (descending) so that the
+            # most-contested merges are resolved first.
+            sorted_merge_ids = sorted(merge_candidates.keys(),
+                                      key=lambda cid: len(merge_candidates[cid]),
+                                      reverse=True)
+
+            for cloud_id in sorted_merge_ids:
+                parent_list = merge_candidates[cloud_id]
                 cloud = current_cloud_field.clouds[cloud_id]
-                
-                # Sort parents by age to find oldest
+
+                # Sort parents by age (oldest first)
                 parent_list.sort(key=lambda x: x[0].age, reverse=True)
-                oldest_parent, oldest_parent_track_id = parent_list[0]
-                
-                # Continue oldest parent's track
-                cloud.age = oldest_parent.age + 1
-                self.cloud_tracks[oldest_parent_track_id].append(cloud)
+
+                # Find the oldest UNCOMMITTED parent
+                winner_parent = None
+                winner_track_id = None
+                for parent, track_id in parent_list:
+                    if track_id not in committed_tracks:
+                        winner_parent = parent
+                        winner_track_id = track_id
+                        break
+
+                if winner_parent is None:
+                    # All parents are already committed to other merges.
+                    # Downgrade: remove this cloud from merge_candidates so it
+                    # falls through to regular matching or new-track creation.
+                    # Also need to remove it from cloud_inheritance merge status
+                    # so the third pass can handle it normally.
+                    continue
+
+                # Continue winner's track
+                cloud.age = winner_parent.age + 1
+                self.cloud_tracks[winner_track_id].append(cloud)
                 new_matched_clouds.add(cloud_id)
-                
+                committed_tracks.add(winner_track_id)
+
                 # Record merge information
                 cloud.merges_count += 1
-                
-                # Keep track of which clouds merged to form this cloud
+
+                # Record which other tracks merged into this cloud
                 for parent, parent_track_id in parent_list:
-                    if parent_track_id != oldest_parent_track_id:
+                    if parent_track_id != winner_track_id:
                         cloud.merged_with.append(parent_track_id)
-                        
-                # Count merges for reporting
+
                 merges_count += 1
-                
-                # Mark other parents as merged
-                for parent, parent_track_id in parent_list[1:]:
-                    if parent_track_id != oldest_parent_track_id:
-                        parent.is_active = False
-                        parent.merged_into = oldest_parent_track_id
+
+                # Mark non-winning parents as merged but keep them alive.
+                # They may have other children (a simultaneous split+merge)
+                # and should get a chance to match in the regular loop.
+                for parent, parent_track_id in parent_list:
+                    if parent_track_id != winner_track_id:
+                        parent.merged_into = winner_track_id
             
             # THIRD PASS: Process regular matches and splits
-            # Identify potential splits (one parent with multiple children)
+            # Identify potential splits: count ALL children per track,
+            # including children that are merge clouds, so that simultaneous
+            # split+merge scenarios are detected correctly.
             potential_splits = {}
             for cloud_id, parent_list in cloud_inheritance.items():
-                if len(parent_list) == 1:  # Only consider single-parent cases for splits
-                    parent, parent_track_id = parent_list[0]
+                for parent, parent_track_id in parent_list:
                     if parent_track_id not in potential_splits:
                         potential_splits[parent_track_id] = []
                     potential_splits[parent_track_id].append(cloud_id)
@@ -132,6 +159,10 @@ class CloudTracker:
             for track_id, track in list(self.cloud_tracks.items()):
                 last_cloud_in_track = track[-1]
                 if not last_cloud_in_track.is_active:
+                    continue
+
+                # Skip tracks already assigned a cloud this timestep (e.g. merge winners)
+                if last_cloud_in_track.timestep == current_cloud_field.timestep:
                     continue
                     
                 found_match = False
@@ -158,9 +189,9 @@ class CloudTracker:
                             break
                 
                 if not found_match:
-                    # Mark as inactive if no matches found (and not already marked as merged)
-                    if last_cloud_in_track.merged_into is None:
-                        last_cloud_in_track.is_active = False
+                    # Mark as inactive — no surviving children found.
+                    # This includes merge losers that had no other children.
+                    last_cloud_in_track.is_active = False
             
             # Handle remaining fragments (splits and new clouds)
             for cloud_id, cloud in current_cloud_field.clouds.items():
