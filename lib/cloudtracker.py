@@ -85,14 +85,22 @@ class CloudTracker:
                                       key=lambda cid: len(merge_candidates[cid]),
                                       reverse=True)
 
+            # Merge winner criterion: 'age' (default) picks oldest parent;
+            # 'size' picks largest parent by cell count.
+            merge_criterion = self.config.get('merge_winner_criterion', 'age')
+            if merge_criterion == 'size':
+                _merge_sort_key = lambda x: (x[0].size, x[0].age)
+            else:
+                _merge_sort_key = lambda x: (x[0].age, x[0].size)
+
             for cloud_id in sorted_merge_ids:
                 parent_list = merge_candidates[cloud_id]
                 cloud = current_cloud_field.clouds[cloud_id]
 
-                # Sort parents by age (oldest first)
-                parent_list.sort(key=lambda x: x[0].age, reverse=True)
+                # Sort parents by configured criterion (descending)
+                parent_list.sort(key=_merge_sort_key, reverse=True)
 
-                # Find the oldest UNCOMMITTED parent
+                # Find the best UNCOMMITTED parent
                 winner_parent = None
                 winner_track_id = None
                 for parent, track_id in parent_list:
@@ -164,31 +172,38 @@ class CloudTracker:
                 # Skip tracks already assigned a cloud this timestep (e.g. merge winners)
                 if last_cloud_in_track.timestep == current_cloud_field.timestep:
                     continue
-                    
-                found_match = False
-                
-                # Find primary match to continue the track
+
+                # Collect all unmatched candidate children for this track
+                candidate_children = []
                 for cloud_id, cloud in current_cloud_field.clouds.items():
                     if cloud_id not in new_matched_clouds and cloud_id in cloud_inheritance:
-                        # Check if this track is in the potential parents
                         for parent, parent_track_id in cloud_inheritance[cloud_id]:
                             if parent_track_id == track_id:
-                                # Keep per-timestep max_height as computed in CloudField
-                                # Old timestep which was back-propagated into the previous timestep:
-                                # current_max_height = np.max(cloud.points[:, 2])
-                                # if current_max_height > last_cloud_in_track.max_height:
-                                #     last_cloud_in_track.max_height = current_max_height
-
-                                cloud.age = last_cloud_in_track.age + 1
-                                track.append(cloud)
-                                new_matched_clouds.add(cloud_id)
-                                found_match = True
+                                candidate_children.append((cloud_id, cloud))
                                 break
-                        
-                        if found_match:
-                            break
-                
-                if not found_match:
+
+                if candidate_children:
+                    # Select the largest child (by cell count) to continue this track
+                    candidate_children.sort(key=lambda x: x[1].size, reverse=True)
+                    best_cloud_id, best_cloud = candidate_children[0]
+
+                    best_cloud.age = last_cloud_in_track.age + 1
+                    track.append(best_cloud)
+                    new_matched_clouds.add(best_cloud_id)
+
+                    # Issue 1 fix: if the previous cloud had merged_into set
+                    # (from Pass 2, where this track was a merge loser), clear it.
+                    # The track survived via this child, so it did not terminate by merge.
+                    if last_cloud_in_track.merged_into is not None:
+                        last_cloud_in_track.merged_into = None
+
+                    # Issue 6 fix: the child that continues the parent track should
+                    # not carry split_from pointing to its own track.
+                    if best_cloud.split_from == track_id:
+                        best_cloud.split_from = None
+                        best_cloud.splits_count = max(0, best_cloud.splits_count - 1)
+                        splits_count = max(0, splits_count - 1)
+                else:
                     # Mark as inactive — no surviving children found.
                     # This includes merge losers that had no other children.
                     last_cloud_in_track.is_active = False
@@ -197,17 +212,16 @@ class CloudTracker:
             for cloud_id, cloud in current_cloud_field.clouds.items():
                 if cloud_id not in new_matched_clouds:
                     if cloud_id in cloud_inheritance:
-                        # This is a split cloud - inherit age from parent
-                        # For consistency, use the oldest parent if multiple
+                        # This is a split or orphaned-merge cloud starting a new track.
+                        # Pick the best parent using the configured criterion.
                         parents = cloud_inheritance[cloud_id]
-                        parents.sort(key=lambda x: x[0].age, reverse=True)
+                        parents.sort(key=_merge_sort_key, reverse=True)
                         parent_cloud = parents[0][0]
                         parent_track_id = parents[0][1]
                         cloud.age = parent_cloud.age + 1
-                        
-                        # If this cloud has a single parent but is starting a new track,
-                        # it's likely a split that wasn't identified as a primary continuation
-                        if len(parents) == 1 and cloud.split_from is None:
+
+                        # Record split provenance if not already set
+                        if cloud.split_from is None:
                             cloud.splits_count += 1
                             cloud.split_from = parent_track_id
                             splits_count += 1

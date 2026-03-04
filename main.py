@@ -88,6 +88,11 @@ config = {
     'min_surface_overlap_points': 1,  # Require at least this many overlapping surface points for a match
     'match_shell_layers': 3,       # Number of cloud shell layers to include for matching (1 = surface points only)
 
+    # Merge/split resolution
+    'merge_winner_criterion': 'age',  # 'age' (default): oldest parent wins merge.
+                                      # 'size': largest parent (cell count) wins merge.
+                                      # Also controls parent selection for orphaned merge children.
+
     # Visualisation (somewhat deprecated)
     'plot_switch': False,        # If True, plot the cloud field at each timestep.
 

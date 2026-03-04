@@ -3,23 +3,57 @@ import numpy as np
 import sys
 import os
 
-# Add parent directory to path to import from lib
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from lib.cloudtracker import CloudTracker
 from lib.cloud import Cloud
 
+
 class MockCloudField:
-    """Simple mock of CloudField for testing"""
+    """Simple mock of CloudField for testing."""
     def __init__(self, clouds_dict, timestep=0):
         self.clouds = clouds_dict
         self.timestep = timestep
 
+
+def _make_cloud(cloud_id, size, location, timestep, n_levels):
+    """Helper: create a minimal Cloud for testing."""
+    return Cloud(
+        cloud_id=cloud_id,
+        size=size,
+        surface_area=size * 2,
+        cloud_base_area=max(1, size // 2),
+        cloud_base_height=location[2],
+        location=location,
+        points=[location],
+        surface_points=np.array([location]),
+        timestep=timestep,
+        max_height=location[2],
+        max_w=1.0,
+        max_w_cloud_base=0.5,
+        mean_u=np.zeros(n_levels),
+        mean_v=np.zeros(n_levels),
+        mean_w=np.zeros(n_levels),
+        ql_flux=0.1,
+        mass_flux=0.2,
+        mass_flux_per_level=np.zeros(n_levels),
+        temp_per_level=np.zeros(n_levels),
+        theta_outside_per_level=np.zeros(n_levels),
+        w_per_level=np.zeros(n_levels),
+        circum_per_level=np.zeros(n_levels),
+        eff_radius_per_level=np.zeros(n_levels),
+    )
+
+
 class TestCloudMergeAge(unittest.TestCase):
-    """Test that merged clouds inherit the age of the oldest parent"""
-    
+    """Test that merged clouds inherit the age of the oldest parent.
+
+    Uses three timesteps so that clouds accumulate genuinely different ages
+    before the merge, rather than relying on constructor-set ages that the
+    tracker overwrites.
+    """
+
     def setUp(self):
-        """Set up test configuration"""
         self.config = {
             'min_size': 3,
             'timestep_duration': 60,
@@ -29,191 +63,81 @@ class TestCloudMergeAge(unittest.TestCase):
             'switch_vertical_drift': False,
             'max_expected_cloud_speed': 20.0,
             'bounding_box_safety_factor': 2.0,
-            'use_pre_filtering': False,  # Disable pre-filtering for simpler tests
+            'use_pre_filtering': False,
         }
-        
-        # Create mock height and horizontal levels
         self.zt = np.array([0, 100, 200, 300, 400, 500])
-        self.xt = np.arange(0, 500, 25.0)  # x coordinates
-        self.yt = np.arange(0, 500, 25.0)  # y coordinates
-        
-        # Create mean velocities for Cloud constructor
-        self.mean_u = np.zeros_like(self.zt)
-        self.mean_v = np.zeros_like(self.zt)
-        self.mean_w = np.zeros_like(self.zt)
-        
-    def test_merge_age_inheritance(self):
-        """Test that merged clouds inherit the age of the oldest parent"""
-        # Initialize tracker
+        self.xt = np.arange(0, 500, 25.0)
+        self.yt = np.arange(0, 500, 25.0)
+        self.n = len(self.zt)
+
+    def test_merge_age_inheritance_default_criterion(self):
+        """Oldest parent wins merge with default 'age' criterion.
+
+        Timeline:
+          T0: Cloud A (id=1, size=10)
+          T1: A continues as A' (id=2), new Cloud B (id=3, size=8)
+          T2: Both A' and B match merged Cloud C (id=4) -> merge.
+              A' has age 1, B has age 0 -> A' wins.
+              C inherits age 2 (=1+1).
+        """
         tracker = CloudTracker(self.config)
-        
-        # TIMESTEP 1: Create three clouds with different ages
-        cloud1 = Cloud(
-            cloud_id=1,
-            size=10,
-            surface_area=20,
-            cloud_base_area=5,
-            cloud_base_height=200,
-            location=(100, 100, 200),
-            points=[(100, 100, 200), (101, 100, 200)],
-            surface_points=np.array([(100, 100, 200)]),
-            timestep=0,
-            max_height=200,
-            max_w=1.0,
-            max_w_cloud_base=0.5,
-            mean_u=self.mean_u,
-            mean_v=self.mean_v,
-            mean_w=self.mean_w,
-            ql_flux=0.1,
-            mass_flux=0.2,
-            mass_flux_per_level=np.zeros_like(self.zt),
-            temp_per_level=np.zeros_like(self.zt),
-            theta_outside_per_level=np.zeros_like(self.zt),
-            w_per_level=np.zeros_like(self.zt),
-            circum_per_level=np.zeros_like(self.zt),
-            eff_radius_per_level=np.zeros_like(self.zt),
-            age=5  # This cloud is oldest
-        )
-        
-        cloud2 = Cloud(
-            cloud_id=2,
-            size=8,
-            surface_area=16,
-            cloud_base_area=4,
-            cloud_base_height=220,
-            location=(150, 150, 220),
-            points=[(150, 150, 220), (151, 150, 220)],
-            surface_points=np.array([(150, 150, 220)]),
-            timestep=0,
-            max_height=220,
-            max_w=1.2,
-            max_w_cloud_base=0.6,
-            mean_u=self.mean_u,
-            mean_v=self.mean_v,
-            mean_w=self.mean_w,
-            ql_flux=0.12,
-            mass_flux=0.22,
-            mass_flux_per_level=np.zeros_like(self.zt),
-            temp_per_level=np.zeros_like(self.zt),
-            theta_outside_per_level=np.zeros_like(self.zt),
-            w_per_level=np.zeros_like(self.zt),
-            circum_per_level=np.zeros_like(self.zt),
-            eff_radius_per_level=np.zeros_like(self.zt),
-            age=3  # This cloud is middle-aged
-        )
-        
-        cloud3 = Cloud(
-            cloud_id=3,
-            size=6,
-            surface_area=12,
-            cloud_base_area=3,
-            cloud_base_height=210,
-            location=(175, 175, 210),
-            points=[(175, 175, 210), (176, 175, 210)],
-            surface_points=np.array([(175, 175, 210)]),
-            timestep=0,
-            max_height=210, 
-            max_w=0.9,
-            max_w_cloud_base=0.4,
-            mean_u=self.mean_u,
-            mean_v=self.mean_v,
-            mean_w=self.mean_w,
-            ql_flux=0.08,
-            mass_flux=0.18,
-            mass_flux_per_level=np.zeros_like(self.zt),
-            temp_per_level=np.zeros_like(self.zt),
-            theta_outside_per_level=np.zeros_like(self.zt),
-            w_per_level=np.zeros_like(self.zt),
-            circum_per_level=np.zeros_like(self.zt),
-            eff_radius_per_level=np.zeros_like(self.zt),
-            age=1  # This cloud is youngest
-        )
-        
-        # Add the clouds to a mock CloudField
-        cloud_field1 = MockCloudField({1: cloud1, 2: cloud2, 3: cloud3})
-        
-        # Update tracker with the first cloud field
-        tracker.update_tracks(cloud_field1, self.zt, self.xt, self.yt)
-        
-        # TIMESTEP 2: Create a merged cloud
-        merged_cloud = Cloud(
-            cloud_id=4,
-            size=24,  # Sum of the three original clouds
-            surface_area=48,
-            cloud_base_area=12,
-            cloud_base_height=230,
-            location=(140, 140, 230),  # Somewhere in the middle
-            points=[(140, 140, 230), (141, 140, 230)],
-            surface_points=np.array([(140, 140, 230)]),
-            timestep=1,
-            max_height=230,
-            max_w=1.3,
-            max_w_cloud_base=0.7,
-            mean_u=self.mean_u,
-            mean_v=self.mean_v,
-            mean_w=self.mean_w,
-            ql_flux=0.13,
-            mass_flux=0.23,
-            mass_flux_per_level=np.zeros_like(self.zt),
-            temp_per_level=np.zeros_like(self.zt),
-            theta_outside_per_level=np.zeros_like(self.zt),
-            w_per_level=np.zeros_like(self.zt),
-            circum_per_level=np.zeros_like(self.zt),
-            eff_radius_per_level=np.zeros_like(self.zt)
-        )
-        
-        # Add the merged cloud to a mock CloudField
-        cloud_field2 = MockCloudField({4: merged_cloud})
-        
-        # Override is_match method to force the merge
-        original_is_match = tracker.is_match
-        
-        def mock_is_match(cloud, last_cloud_in_track, current_cloud_field):
-            # All three clouds should match with merged_cloud
-            return True
-        
-        # Apply mock method
+
+        # Use a timestep-aware mock
+        def mock_is_match(cloud, last_cloud, cf):
+            if cf.timestep == 1:
+                return last_cloud.cloud_id == 1 and cloud.cloud_id == 2
+            if cf.timestep == 2:
+                return cloud.cloud_id == 4 and last_cloud.cloud_id in [2, 3]
+            return False
+
         tracker.is_match = mock_is_match
-        
-        # Update tracker with the second cloud field
-        tracker.update_tracks(cloud_field2, self.zt, self.xt, self.yt)
-        
-        # Restore original is_match method
-        tracker.is_match = original_is_match
-        
-        # Get all tracks
+
+        # T0
+        cloud_a = _make_cloud(1, 10, (100, 100, 200), 0, self.n)
+        tracker.update_tracks(MockCloudField({1: cloud_a}, timestep=0),
+                              self.zt, self.xt, self.yt)
+
+        # T1
+        cloud_a_prime = _make_cloud(2, 10, (102, 102, 210), 1, self.n)
+        cloud_b = _make_cloud(3, 8, (300, 300, 250), 1, self.n)
+        tracker.update_tracks(MockCloudField({2: cloud_a_prime, 3: cloud_b}, timestep=1),
+                              self.zt, self.xt, self.yt)
+
+        # Verify intermediate state
+        self.assertEqual(tracker.cloud_tracks[1][-1].age, 1)
+        self.assertEqual(tracker.cloud_tracks[3][-1].age, 0)
+
+        # T2
+        cloud_c = _make_cloud(4, 20, (120, 120, 220), 2, self.n)
+        tracker.update_tracks(MockCloudField({4: cloud_c}, timestep=2),
+                              self.zt, self.xt, self.yt)
+
         tracks = tracker.get_tracks()
-        
-        # Find which track contains the merged cloud
-        merged_track = None
+
+        # Find the track that contains the merged cloud C
         merged_track_id = None
-        for track_id, track in tracks.items():
+        for tid, track in tracks.items():
             if any(c.cloud_id == 4 for c in track):
-                merged_track = track
-                merged_track_id = track_id
+                merged_track_id = tid
                 break
-        
-        self.assertIsNotNone(merged_track, "Could not find track containing the merged cloud")
-        
-        # Find the parent cloud in the merged track
-        parent_in_merged_track = merged_track[0]
-        
-        # The parent in the merged track should be the oldest cloud (cloud1)
-        self.assertEqual(parent_in_merged_track.cloud_id, 1, 
-                       "The oldest cloud should be the parent in the merged track")
-        
-        # The merged cloud should have age = oldest parent's age + 1
-        self.assertEqual(merged_track[-1].age, cloud1.age + 1, 
-                       "Merged cloud should inherit age from oldest parent + 1")
-        
-        # The other clouds should have merged_into pointing to the merged track
-        for track_id, track in tracks.items():
-            if track_id != merged_track_id:
-                last_cloud = track[-1]
-                if last_cloud.cloud_id in [2, 3]:  # These were the other clouds
-                    self.assertFalse(last_cloud.is_active, f"Cloud {last_cloud.cloud_id} should be inactive")
-                    self.assertEqual(last_cloud.merged_into, merged_track_id, 
-                                  f"Cloud {last_cloud.cloud_id} should have merged_into pointing to track {merged_track_id}")
+
+        self.assertIsNotNone(merged_track_id)
+
+        # The winning track should be track 1 (A -> A' -> C) because A' is older
+        merged_track = tracks[merged_track_id]
+        self.assertEqual(merged_track_id, 1)
+        self.assertEqual(len(merged_track), 3)
+        self.assertEqual(merged_track[-1].age, 2, "C should have age 2 (=1+1)")
+
+        # Merged cloud records which tracks merged into it
+        self.assertIn(3, merged_track[-1].merged_with)
+        self.assertEqual(merged_track[-1].merges_count, 1)
+
+        # Losing track B should be inactive with merged_into pointing to winner
+        loser_track = tracks[3]
+        self.assertFalse(loser_track[-1].is_active)
+        self.assertEqual(loser_track[-1].merged_into, 1)
+
 
 if __name__ == "__main__":
     unittest.main()

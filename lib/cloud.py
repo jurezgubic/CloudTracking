@@ -84,10 +84,10 @@ class Cloud:
         self.merged_into = None  # Track ID this cloud merged into, if any
 
         # Merges and splits
-        self.merges_count = 0      # Number of times this cloud has merged with others
-        self.splits_count = 0      # Number of times this cloud has split from others
-        self.merged_with = []      # List of cloud IDs this cloud has merged with
-        self.split_from = None     # Cloud ID this cloud split from (if any)
+        self.merges_count = 0      # Number of merge events this cloud is the result of
+        self.splits_count = 0      # Number of split events producing this cloud
+        self.merged_with = []      # List of track IDs that merged into this cloud
+        self.split_from = None     # Track ID this cloud split from (if any)
 
         self.area_per_level = area_per_level
         self.equiv_radius_per_level = equiv_radius_per_level

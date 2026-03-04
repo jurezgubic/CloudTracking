@@ -10,8 +10,8 @@ The code tracks and analyses cloud data, including cloud volume, surface area, c
 - Overlap & matching. Drifts the cloud's surface (optionally with multiple inside shells) from last timestep to current timestep by the cloud’s mean velocity. Uses that to check overlap with a KD-tree of current timestep. Requires minimum number of overlap points.
   - Prefilter. Before overlap, reduces the number of candidates by min distance search radius based on max speed (configurable). Optional full-domain search if no candidates.
 - Merges & Splits.
-  - Merges. Oldest parent continues; the child takes the age of parent. Others go inactive with merged_with flag.
-  - Splits. One child continues, others start new tracks with age = parent + 1 and have split_from flag. 
+  - Merges. By default the oldest parent continues; optionally, the largest (by cell count) parent continues (configurable via `merge_winner_criterion`). The child takes the age of the winning parent. Losing parents receive a `merged_into` flag pointing to the winner's track; they go inactive only if they have no other children (otherwise they continue via the split path).
+  - Splits. The largest child (by cell count) continues the parent track; other children start new tracks with age = parent + 1 and carry a `split_from` flag.
 - Tainting (removal of partial lifetimes). Any cloud present at t=0 is tainted. Anything then merging into a tainted cloud becomes tainted. Any cloud still-active at final step is also tainted. Set by a valid_track flag. 
 - Biperiodicity. When identifying clouds, the code merges labels on opposite edges if edge points are within a threshold (configurable) in order to prevent artificial splits across boundaries. 
 - Near-environment rings. For each cloud and each level, tracks Manhattan distance rings and stores mean fields. 
