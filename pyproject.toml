@@ -1,3 +1,55 @@
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "cloudtracker"
+version = "0.1.0"
+description = "Cloud tracking and analysis system for Large Eddy Simulation (LES) data"
+readme = "readme.md"
+requires-python = ">=3.9"
+authors = [
+    { name = "Jure Zgubic", email = "jure.zgubi@gmail.com" },
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "Topic :: Scientific/Engineering :: Atmospheric Science",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+dependencies = [
+    "numpy>=1.24",
+    "scipy>=1.10",
+    "scikit-image>=0.20",
+    "netCDF4>=1.6",
+    "numba>=0.57",
+    "memory-profiler>=0.60",
+]
+
+[project.optional-dependencies]
+analysis = [
+    "matplotlib>=3.7",
+    "plotly>=5.15",
+    "seaborn>=0.12",
+    "pandas>=2.0",
+    "hmmlearn>=0.3",
+    "tqdm>=4.60",
+    "scikit-learn>=1.3",
+]
+dev = [
+    "pytest>=8.0",
+    "pytest-cov>=4.0",
+    "ruff>=0.3",
+]
+all = ["cloudtracker[analysis,dev]"]
+
+[project.urls]
+Repository = "https://github.com/jurezgubic/CloudTracking"
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-v --tb=short"
@@ -20,3 +72,14 @@ exclude_lines = [
     "if __name__",
     "def __repr__",
 ]
+
+[tool.ruff]
+target-version = "py39"
+line-length = 120
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "SIM"]
+ignore = ["E501"]
+
+[tool.ruff.format]
+quote-style = "double"

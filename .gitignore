@@ -6,10 +6,8 @@ __pycache__/
 # netcdf files
 *.nc
 
-# Github copilot instructions
-.github/
-
-# Claude Code instructions (local only)
+# AI assistant instructions (local only)
+.github/copilot-instructions.md
 CLAUDE.md
 
 # All analysis results
