@@ -45,7 +45,7 @@ class TestCloudTracker(unittest.TestCase):
         self.cloud_tracker.domain_size_x = 1000.0
         self.cloud_tracker.domain_size_y = 1000.0
         
-    def create_mock_cloud(self, cloud_id, x, y, z, is_active=True, age=0):
+    def create_mock_cloud(self, cloud_id, x, y, z, is_active=True, age=0, timestep=0):
         """Create a mock cloud for testing."""
         # Create surface points around the center
         surface_points = np.array([
@@ -65,7 +65,7 @@ class TestCloudTracker(unittest.TestCase):
             location=(x, y, z),
             points=[(x, y, z)],
             surface_points=surface_points,
-            timestep=0,
+            timestep=timestep,
             max_height=z,
             max_w=1.0,
             max_w_cloud_base=0.5,
@@ -87,15 +87,15 @@ class TestCloudTracker(unittest.TestCase):
     def test_inactive_cloud_doesnt_match_new_cloud(self):
         """Test that new clouds don't get matched with inactive clouds."""
         # Timestep 1: Cloud A appears
-        cloud_a_t1 = self.create_mock_cloud(1, 100, 100, 500)
-        cloud_field_t1 = MockCloudField({cloud_a_t1.cloud_id: cloud_a_t1})
+        cloud_a_t1 = self.create_mock_cloud(1, 100, 100, 500, timestep=0)
+        cloud_field_t1 = MockCloudField({cloud_a_t1.cloud_id: cloud_a_t1}, timestep=0)
         
         # Process first timestep - should create a new track
         self.cloud_tracker.update_tracks(cloud_field_t1, self.zt, self.xt, self.yt)
         
         # Timestep 2: Cloud A at same location (should match)
-        cloud_a_t2 = self.create_mock_cloud(2, 100, 100, 500, age=1)
-        cloud_field_t2 = MockCloudField({cloud_a_t2.cloud_id: cloud_a_t2})
+        cloud_a_t2 = self.create_mock_cloud(2, 100, 100, 500, age=1, timestep=1)
+        cloud_field_t2 = MockCloudField({cloud_a_t2.cloud_id: cloud_a_t2}, timestep=1)
         
         # Process second timestep - should match and add to track
         self.cloud_tracker.update_tracks(cloud_field_t2, self.zt, self.xt, self.yt)
@@ -110,8 +110,8 @@ class TestCloudTracker(unittest.TestCase):
         track_a[-1].is_active = False
         
         # Timestep 3: Cloud A is gone, Cloud B appears far away
-        cloud_b_t3 = self.create_mock_cloud(3, 500, 500, 400)  # Different location
-        cloud_field_t3 = MockCloudField({cloud_b_t3.cloud_id: cloud_b_t3})
+        cloud_b_t3 = self.create_mock_cloud(3, 500, 500, 400, timestep=2)  # Different location
+        cloud_field_t3 = MockCloudField({cloud_b_t3.cloud_id: cloud_b_t3}, timestep=2)
         
         # Process third timestep
         self.cloud_tracker.update_tracks(cloud_field_t3, self.zt, self.xt, self.yt)
@@ -151,13 +151,13 @@ class TestCloudTracker(unittest.TestCase):
     def test_matched_cloud_extends_track(self):
         """Test that a matched cloud extends an existing track."""
         # First cloud
-        cloud_t1 = self.create_mock_cloud(1, 100, 100, 500)
-        cloud_field_t1 = MockCloudField({cloud_t1.cloud_id: cloud_t1})
+        cloud_t1 = self.create_mock_cloud(1, 100, 100, 500, timestep=0)
+        cloud_field_t1 = MockCloudField({cloud_t1.cloud_id: cloud_t1}, timestep=0)
         self.cloud_tracker.update_tracks(cloud_field_t1, self.zt, self.xt, self.yt)
         
         # Second cloud at same location (overlapping surface points)
-        cloud_t2 = self.create_mock_cloud(2, 100, 100, 500)
-        cloud_field_t2 = MockCloudField({cloud_t2.cloud_id: cloud_t2})
+        cloud_t2 = self.create_mock_cloud(2, 100, 100, 500, timestep=1)
+        cloud_field_t2 = MockCloudField({cloud_t2.cloud_id: cloud_t2}, timestep=1)
         self.cloud_tracker.update_tracks(cloud_field_t2, self.zt, self.xt, self.yt)
         
         # Should still have 1 track with 2 clouds
