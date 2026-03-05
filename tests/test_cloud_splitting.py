@@ -8,16 +8,14 @@ Verifies:
   4. New Cloud Handling: Genuinely new clouds start with age 0.
 """
 
-import numpy as np
 from lib.cloudtracker import CloudTracker
-from tests.conftest import make_cloud, SimpleMockCloudField
+from tests.conftest import SimpleMockCloudField, make_cloud
 
 
 class TestCloudSplitting:
     """Test the cloud splitting behavior in CloudTracker."""
 
-    def test_largest_child_continues_parent_track(
-            self, tracker_config, domain_grids):
+    def test_largest_child_continues_parent_track(self, tracker_config, domain_grids):
         """The largest child (by cell count) continues the parent track.
 
         T0: Cloud P (id=1, size=10)
@@ -42,18 +40,15 @@ class TestCloudSplitting:
 
         # T0
         cloud_p = make_cloud(1, 10, (100, 100, 200), 0, n)
-        tracker.update_tracks(
-            SimpleMockCloudField({1: cloud_p}, timestep=0),
-            zt, xt, yt)
+        tracker.update_tracks(SimpleMockCloudField({1: cloud_p}, timestep=0), zt, xt, yt)
 
         # T1
         cloud_big = make_cloud(2, 6, (102, 102, 210), 1, n)
         cloud_small = make_cloud(3, 4, (97, 99, 205), 1, n)
         cloud_new = make_cloud(4, 8, (300, 300, 250), 1, n)
         tracker.update_tracks(
-            SimpleMockCloudField(
-                {2: cloud_big, 3: cloud_small, 4: cloud_new}, timestep=1),
-            zt, xt, yt)
+            SimpleMockCloudField({2: cloud_big, 3: cloud_small, 4: cloud_new}, timestep=1), zt, xt, yt
+        )
 
         tracks = tracker.get_tracks()
 
@@ -65,14 +60,14 @@ class TestCloudSplitting:
         assert parent_track[1].age == 1
 
         # Continuation child should NOT have split_from (it IS the parent track)
-        assert parent_track[1].split_from is None,             "Child continuing parent must not carry split_from"
+        assert parent_track[1].split_from is None, "Child continuing parent must not carry split_from"
 
         # Smaller child starts a new track with provenance
         split_track = tracks[3]
         assert len(split_track) == 1
         assert split_track[0].cloud_id == 3
         assert split_track[0].age == 1
-        assert split_track[0].split_from == 1,             "Split child should reference parent track"
+        assert split_track[0].split_from == 1, "Split child should reference parent track"
 
         # New cloud starts fresh
         new_track = tracks[4]

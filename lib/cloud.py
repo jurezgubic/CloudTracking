@@ -1,55 +1,58 @@
 class Cloud:
     """Create a cloud object."""
-    def __init__(self,
-                 cloud_id,
-                 size,
-                 surface_area,
-                 cloud_base_area,
-                 cloud_base_height,
-                 location,
-                 points,
-                 surface_points,
-                 timestep,
-                 max_height,
-                 max_w,
-                 max_w_cloud_base,
-                 mean_u,
-                 mean_v,
-                 mean_w,
-                 ql_flux,
-                 mass_flux,
-                 mass_flux_per_level,
-                 temp_per_level,
-                 theta_outside_per_level,
-                 w_per_level,
-                 circum_per_level,
-                 eff_radius_per_level,  # legacy: stored compactness ratio
-                 # Per-level kinematics (for NIP)
-                 u_per_level=None,
-                 v_per_level=None,
-                 # NIP diagnostics
-                 nip_per_level=None,
-                 nip_acc_per_level=None,
-                 is_active=True,
-                 age=0,
-                 area_per_level=None,
-                 equiv_radius_per_level=None,
-                 compactness_per_level=None,
-                 base_radius_diagnosed=None,
-                 base_area_diagnosed=None,
-                 max_equiv_radius=None,
-                 # Environment Aloft
-                 env_aloft_qt_diff=None,
-                 env_aloft_thetal_diff=None,
-                 env_aloft_shear=None,
-                 env_aloft_n2=None,
-                 env_aloft_rh=None,
-                 env_aloft_qt_std=None,
-                 env_aloft_thetal_std=None,
-                 env_aloft_shear_std=None,
-                 env_aloft_n2_std=None,
-                 env_aloft_rh_std=None):
-        """ Initialize the cloud object """
+
+    def __init__(
+        self,
+        cloud_id,
+        size,
+        surface_area,
+        cloud_base_area,
+        cloud_base_height,
+        location,
+        points,
+        surface_points,
+        timestep,
+        max_height,
+        max_w,
+        max_w_cloud_base,
+        mean_u,
+        mean_v,
+        mean_w,
+        ql_flux,
+        mass_flux,
+        mass_flux_per_level,
+        temp_per_level,
+        theta_outside_per_level,
+        w_per_level,
+        circum_per_level,
+        eff_radius_per_level,  # legacy: stored compactness ratio
+        # Per-level kinematics (for NIP)
+        u_per_level=None,
+        v_per_level=None,
+        # NIP diagnostics
+        nip_per_level=None,
+        nip_acc_per_level=None,
+        is_active=True,
+        age=0,
+        area_per_level=None,
+        equiv_radius_per_level=None,
+        compactness_per_level=None,
+        base_radius_diagnosed=None,
+        base_area_diagnosed=None,
+        max_equiv_radius=None,
+        # Environment Aloft
+        env_aloft_qt_diff=None,
+        env_aloft_thetal_diff=None,
+        env_aloft_shear=None,
+        env_aloft_n2=None,
+        env_aloft_rh=None,
+        env_aloft_qt_std=None,
+        env_aloft_thetal_std=None,
+        env_aloft_shear_std=None,
+        env_aloft_n2_std=None,
+        env_aloft_rh_std=None,
+    ):
+        """Initialize the cloud object"""
         self.cloud_id = cloud_id
         self.size = size
         self.surface_area = surface_area
@@ -84,10 +87,10 @@ class Cloud:
         self.merged_into = None  # Track ID this cloud merged into, if any
 
         # Merges and splits
-        self.merges_count = 0      # Number of merge events this cloud is the result of
-        self.splits_count = 0      # Number of split events producing this cloud
-        self.merged_with = []      # List of track IDs that merged into this cloud
-        self.split_from = None     # Track ID this cloud split from (if any)
+        self.merges_count = 0  # Number of merge events this cloud is the result of
+        self.splits_count = 0  # Number of split events producing this cloud
+        self.merged_with = []  # List of track IDs that merged into this cloud
+        self.split_from = None  # Track ID this cloud split from (if any)
 
         self.area_per_level = area_per_level
         self.equiv_radius_per_level = equiv_radius_per_level
@@ -119,7 +122,7 @@ class Cloud:
         self.env_buoyancy_rings = None
 
     def update_max_height(self, new_height):
-        """ Update the max height of the cloud """
+        """Update the max height of the cloud"""
         if new_height > self.max_height:
             self.max_height = new_height
 

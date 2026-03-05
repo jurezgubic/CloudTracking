@@ -1,6 +1,7 @@
 # filepath: /Users/jure/PhD/coding/tracking/cloudtracker/tests/test_main.py
 import unittest
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
+
 from lib.cloud import Cloud
 from lib.cloudtracker import CloudTracker
 from main import finalize_partial_lifetime_tracks
@@ -9,13 +10,30 @@ from main import finalize_partial_lifetime_tracks
 def _create_mock_cloud(cloud_id, timestep, is_active):
     """Helper to create a minimal Cloud for testing."""
     return Cloud(
-        cloud_id=cloud_id, size=10, surface_area=5, cloud_base_area=5,
-        cloud_base_height=0, location=(0, 0, 0), points=[], surface_points=[],
-        timestep=timestep, max_height=500, max_w=1, max_w_cloud_base=0.5,
-        mean_u=[], mean_v=[], mean_w=[],
-        ql_flux=0, mass_flux=0, mass_flux_per_level=[], temp_per_level=[],
-        theta_outside_per_level=[], w_per_level=[], circum_per_level=[],
-        eff_radius_per_level=[], is_active=is_active
+        cloud_id=cloud_id,
+        size=10,
+        surface_area=5,
+        cloud_base_area=5,
+        cloud_base_height=0,
+        location=(0, 0, 0),
+        points=[],
+        surface_points=[],
+        timestep=timestep,
+        max_height=500,
+        max_w=1,
+        max_w_cloud_base=0.5,
+        mean_u=[],
+        mean_v=[],
+        mean_w=[],
+        ql_flux=0,
+        mass_flux=0,
+        mass_flux_per_level=[],
+        temp_per_level=[],
+        theta_outside_per_level=[],
+        w_per_level=[],
+        circum_per_level=[],
+        eff_radius_per_level=[],
+        is_active=is_active,
     )
 
 
@@ -29,21 +47,19 @@ class TestMainPartialLifetime(unittest.TestCase):
         mock_dataset = MagicMock()
         mock_dataset.variables = {
             "valid_track": [1, 1, 1],
-            "merged_into": MagicMock()  # Add the merged_into variable to the mock
+            "merged_into": MagicMock(),  # Add the merged_into variable to the mock
         }
         mock_dataset_cls.return_value.__enter__.return_value = mock_dataset
 
-        # Create a mock CloudTracker with 3 tracks: 
+        # Create a mock CloudTracker with 3 tracks:
         # 1. Partial lifetime (starts at t=0)
         # 2. Partial lifetime (still active at t=19 if total_timesteps=20)
         # 3. Full lifetime (starts at t=1, ends at t=18, is_inactive by then)
         cloud_tracker = CloudTracker(config={})
         cloud_tracker.cloud_tracks = {
             0: [_create_mock_cloud(0, 0, False)],
-            1: [_create_mock_cloud(1, 5, True),
-                _create_mock_cloud(1, 19, True)],
-            2: [_create_mock_cloud(2, 1, True),
-                _create_mock_cloud(2, 18, False)]
+            1: [_create_mock_cloud(1, 5, True), _create_mock_cloud(1, 19, True)],
+            2: [_create_mock_cloud(2, 1, True), _create_mock_cloud(2, 18, False)],
         }
 
         # total_timesteps = 20 => track #0 partial-lifetime (started at t=0),
@@ -64,5 +80,6 @@ class TestMainPartialLifetime(unittest.TestCase):
         self.assertEqual(mock_dataset.variables["valid_track"][1], 0, "Track 1 should be flagged as partial-lifetime")
         self.assertEqual(mock_dataset.variables["valid_track"][2], 1, "Track 2 should remain valid")
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     unittest.main()

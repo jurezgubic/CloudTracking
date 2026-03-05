@@ -8,9 +8,9 @@ Covers:
 """
 
 import pytest
-import numpy as np
+
 from lib.cloudtracker import CloudTracker
-from tests.conftest import make_cloud, SimpleMockCloudField
+from tests.conftest import SimpleMockCloudField, make_cloud
 
 
 class TestStaleMergedIntoClearedOnSplitContinuation:
@@ -27,8 +27,7 @@ class TestStaleMergedIntoClearedOnSplitContinuation:
       - B.merged_into should be None (cleared), because B's track did not end.
     """
 
-    def test_merged_into_cleared_when_track_survives(
-            self, tracker_config, domain_grids):
+    def test_merged_into_cleared_when_track_survives(self, tracker_config, domain_grids):
         zt, xt, yt = domain_grids
         n = len(zt)
         tracker = CloudTracker(tracker_config)
@@ -46,16 +45,12 @@ class TestStaleMergedIntoClearedOnSplitContinuation:
         # T0
         cloud_a = make_cloud(1, 10, (100, 100, 200), 0, n)
         cloud_b = make_cloud(2, 8, (200, 200, 200), 0, n)
-        tracker.update_tracks(
-            SimpleMockCloudField({1: cloud_a, 2: cloud_b}, timestep=0),
-            zt, xt, yt)
+        tracker.update_tracks(SimpleMockCloudField({1: cloud_a, 2: cloud_b}, timestep=0), zt, xt, yt)
 
         # T1
         cloud_m = make_cloud(3, 18, (110, 110, 210), 1, n)
         cloud_s = make_cloud(4, 6, (210, 210, 210), 1, n)
-        tracker.update_tracks(
-            SimpleMockCloudField({3: cloud_m, 4: cloud_s}, timestep=1),
-            zt, xt, yt)
+        tracker.update_tracks(SimpleMockCloudField({3: cloud_m, 4: cloud_s}, timestep=1), zt, xt, yt)
 
         tracks = tracker.get_tracks()
 
@@ -70,7 +65,7 @@ class TestStaleMergedIntoClearedOnSplitContinuation:
 
         # B's merged_into was set in Pass 2 but must be cleared in Pass 3
         cloud_b_in_track = tracks[2][0]
-        assert cloud_b_in_track.merged_into is None,             "merged_into must be cleared when track survives via split child"
+        assert cloud_b_in_track.merged_into is None, "merged_into must be cleared when track survives via split child"
 
         # M should still record that track 2 merged into it
         assert 2 in tracks[1][-1].merged_with
@@ -90,7 +85,7 @@ class TestMergeWinnerCriterion:
     def _run_merge(tracker_config, domain_grids, criterion):
         zt, xt, yt = domain_grids
         n = len(zt)
-        config = {**tracker_config, 'merge_winner_criterion': criterion}
+        config = {**tracker_config, "merge_winner_criterion": criterion}
         tracker = CloudTracker(config)
 
         def mock_is_match(cloud, last_cloud, cf):
@@ -103,32 +98,35 @@ class TestMergeWinnerCriterion:
         tracker.is_match = mock_is_match
 
         tracker.update_tracks(
-            SimpleMockCloudField(
-                {1: make_cloud(1, 5, (100, 100, 200), 0, n)}, timestep=0),
-            zt, xt, yt)
-        tracker.update_tracks(
-            SimpleMockCloudField({
-                2: make_cloud(2, 5, (102, 102, 210), 1, n),
-                3: make_cloud(3, 20, (300, 300, 250), 1, n),
-            }, timestep=1),
-            zt, xt, yt)
+            SimpleMockCloudField({1: make_cloud(1, 5, (100, 100, 200), 0, n)}, timestep=0), zt, xt, yt
+        )
         tracker.update_tracks(
             SimpleMockCloudField(
-                {4: make_cloud(4, 25, (120, 120, 220), 2, n)}, timestep=2),
-            zt, xt, yt)
+                {
+                    2: make_cloud(2, 5, (102, 102, 210), 1, n),
+                    3: make_cloud(3, 20, (300, 300, 250), 1, n),
+                },
+                timestep=1,
+            ),
+            zt,
+            xt,
+            yt,
+        )
+        tracker.update_tracks(
+            SimpleMockCloudField({4: make_cloud(4, 25, (120, 120, 220), 2, n)}, timestep=2), zt, xt, yt
+        )
 
         return tracker.get_tracks()
 
     @pytest.mark.parametrize(
         "criterion, winner_track, expected_age",
         [
-            ("age",  1, 2),   # A' (age=1) beats B (age=0) -> winner age=2
-            ("size", 3, 1),   # B (size=20) beats A' (size=5) -> winner age=1
+            ("age", 1, 2),  # A' (age=1) beats B (age=0) -> winner age=2
+            ("size", 3, 1),  # B (size=20) beats A' (size=5) -> winner age=1
         ],
         ids=["age_criterion", "size_criterion"],
     )
-    def test_merge_winner(self, tracker_config, domain_grids,
-                          criterion, winner_track, expected_age):
+    def test_merge_winner(self, tracker_config, domain_grids, criterion, winner_track, expected_age):
         tracks = self._run_merge(tracker_config, domain_grids, criterion)
 
         assert 4 in [c.cloud_id for c in tracks[winner_track]]
@@ -172,19 +170,35 @@ class TestDowngradedMergeOrphanProvenance:
         tracker.is_match = mock_is_match
 
         # T0
-        tracker.update_tracks(SimpleMockCloudField({
-            1: make_cloud(1, 30, (100, 100, 200), 0, n),
-            2: make_cloud(2, 25, (200, 200, 200), 0, n),
-            3: make_cloud(3, 15, (300, 300, 200), 0, n),
-            4: make_cloud(4, 10, (400, 400, 200), 0, n),
-        }, timestep=0), zt, xt, yt)
+        tracker.update_tracks(
+            SimpleMockCloudField(
+                {
+                    1: make_cloud(1, 30, (100, 100, 200), 0, n),
+                    2: make_cloud(2, 25, (200, 200, 200), 0, n),
+                    3: make_cloud(3, 15, (300, 300, 200), 0, n),
+                    4: make_cloud(4, 10, (400, 400, 200), 0, n),
+                },
+                timestep=0,
+            ),
+            zt,
+            xt,
+            yt,
+        )
 
         # T1
-        tracker.update_tracks(SimpleMockCloudField({
-            5: make_cloud(5, 40, (110, 110, 210), 1, n),
-            6: make_cloud(6, 35, (210, 210, 210), 1, n),
-            7: make_cloud(7, 8, (150, 150, 210), 1, n),
-        }, timestep=1), zt, xt, yt)
+        tracker.update_tracks(
+            SimpleMockCloudField(
+                {
+                    5: make_cloud(5, 40, (110, 110, 210), 1, n),
+                    6: make_cloud(6, 35, (210, 210, 210), 1, n),
+                    7: make_cloud(7, 8, (150, 150, 210), 1, n),
+                },
+                timestep=1,
+            ),
+            zt,
+            xt,
+            yt,
+        )
 
         tracks = tracker.get_tracks()
 
@@ -196,5 +210,5 @@ class TestDowngradedMergeOrphanProvenance:
         orphan_track = tracks[7]
         assert len(orphan_track) == 1
         assert orphan_track[0].cloud_id == 7
-        assert orphan_track[0].split_from is not None,             "Orphaned merge child must have split_from provenance"
-        assert orphan_track[0].split_from in [1, 2],             "split_from should point to one of the committed parents"
+        assert orphan_track[0].split_from is not None, "Orphaned merge child must have split_from provenance"
+        assert orphan_track[0].split_from in [1, 2], "split_from should point to one of the committed parents"

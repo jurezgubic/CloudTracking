@@ -10,42 +10,43 @@ Provides reusable factories and domain setup used across multiple test modules:
   - SimpleMockCloudField: minimal mock without KD-tree (for merge/split tests)
 """
 
-import pytest
 import numpy as np
+import pytest
 from scipy.spatial import cKDTree
 
 from lib.cloud import Cloud
 from lib.cloudtracker import CloudTracker
 
-
 # ---------------------------------------------------------------------------
 # Configuration
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture
 def tracker_config():
     """Default CloudTracker configuration for tests."""
     return {
-        'min_size': 3,
-        'timestep_duration': 60,
-        'horizontal_resolution': 25.0,
-        'switch_wind_drift': False,
-        'switch_background_drift': False,
-        'switch_vertical_drift': False,
-        'max_expected_cloud_speed': 20.0,
-        'bounding_box_safety_factor': 2.0,
-        'use_pre_filtering': False,
-        'switch_prefilter_fallback': True,
-        'match_safety_factor_dynamic': 2.0,
-        'min_h_match_factor': 1.0,
-        'min_v_match_factor': 1.0,
-        'min_surface_overlap_points': 1,
+        "min_size": 3,
+        "timestep_duration": 60,
+        "horizontal_resolution": 25.0,
+        "switch_wind_drift": False,
+        "switch_background_drift": False,
+        "switch_vertical_drift": False,
+        "max_expected_cloud_speed": 20.0,
+        "bounding_box_safety_factor": 2.0,
+        "use_pre_filtering": False,
+        "switch_prefilter_fallback": True,
+        "match_safety_factor_dynamic": 2.0,
+        "min_h_match_factor": 1.0,
+        "min_v_match_factor": 1.0,
+        "min_surface_overlap_points": 1,
     }
 
 
 # ---------------------------------------------------------------------------
 # Domain grids
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture
 def domain_grids():
@@ -60,9 +61,19 @@ def domain_grids():
 # Cloud factory
 # ---------------------------------------------------------------------------
 
-def make_cloud(cloud_id, size, location, timestep, n_levels,
-               is_active=True, mean_u=None, mean_v=None, mean_w=None,
-               surface_points=None):
+
+def make_cloud(
+    cloud_id,
+    size,
+    location,
+    timestep,
+    n_levels,
+    is_active=True,
+    mean_u=None,
+    mean_v=None,
+    mean_w=None,
+    surface_points=None,
+):
     """Create a lightweight Cloud for testing.
 
     Parameters
@@ -127,9 +138,11 @@ def make_cloud(cloud_id, size, location, timestep, n_levels,
 # Tracker factory
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture
 def make_tracker(tracker_config, domain_grids):
     """Factory fixture: returns a ready-to-use CloudTracker with domain set."""
+
     def _make(**config_overrides):
         cfg = {**tracker_config, **config_overrides}
         tracker = CloudTracker(cfg)
@@ -137,15 +150,17 @@ def make_tracker(tracker_config, domain_grids):
         tracker.zt = zt
         tracker.xt = xt
         tracker.yt = yt
-        tracker.domain_size_x = float(xt[-1] - xt[0]) + cfg['horizontal_resolution']
-        tracker.domain_size_y = float(yt[-1] - yt[0]) + cfg['horizontal_resolution']
+        tracker.domain_size_x = float(xt[-1] - xt[0]) + cfg["horizontal_resolution"]
+        tracker.domain_size_y = float(yt[-1] - yt[0]) + cfg["horizontal_resolution"]
         return tracker
+
     return _make
 
 
 # ---------------------------------------------------------------------------
 # Mock cloud fields
 # ---------------------------------------------------------------------------
+
 
 class MockCloudField:
     """Mock CloudField with KD-tree infrastructure for surface-point overlap tests."""
@@ -165,7 +180,7 @@ class MockCloudField:
 
         total_points = 0
         for cloud in self.clouds.values():
-            if hasattr(cloud, 'surface_points') and cloud.surface_points is not None:
+            if hasattr(cloud, "surface_points") and cloud.surface_points is not None:
                 pts = cloud.surface_points
                 if isinstance(pts, np.ndarray):
                     total_points += pts.shape[0]
@@ -180,7 +195,7 @@ class MockCloudField:
 
         idx = 0
         for cloud_id, cloud in self.clouds.items():
-            if hasattr(cloud, 'surface_points') and cloud.surface_points is not None:
+            if hasattr(cloud, "surface_points") and cloud.surface_points is not None:
                 points = cloud.surface_points
                 if not isinstance(points, np.ndarray):
                     points = np.array(points)
@@ -188,8 +203,8 @@ class MockCloudField:
                     points = points.reshape(1, -1)
                 n = points.shape[0]
                 if n > 0:
-                    self.surface_points_array[idx:idx + n] = points
-                    self.surface_point_to_cloud_id[idx:idx + n] = cloud_id
+                    self.surface_points_array[idx : idx + n] = points
+                    self.surface_point_to_cloud_id[idx : idx + n] = cloud_id
                     idx += n
 
         if idx < total_points:

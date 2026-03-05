@@ -6,20 +6,24 @@ tracks when matched, and handles inactive clouds properly.
 """
 
 import numpy as np
-from lib.cloudtracker import CloudTracker
+
 from lib.cloud import Cloud
+from lib.cloudtracker import CloudTracker
 from tests.conftest import MockCloudField
 
 
 def _make_track_cloud(cloud_id, x, y, z, is_active=True, age=0, timestep=0):
     """Create a Cloud with a 5-point surface (for real KD-tree matching)."""
-    surface_points = np.array([
-        [x, y, z],
-        [x + 10, y, z],
-        [x, y + 10, z],
-        [x - 10, y, z],
-        [x, y - 10, z],
-    ], dtype=np.float32)
+    surface_points = np.array(
+        [
+            [x, y, z],
+            [x + 10, y, z],
+            [x, y + 10, z],
+            [x - 10, y, z],
+            [x, y - 10, z],
+        ],
+        dtype=np.float32,
+    )
 
     return Cloud(
         cloud_id=cloud_id,

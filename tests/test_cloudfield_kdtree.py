@@ -10,8 +10,9 @@ Verifies that the real CloudField KD-tree builder:
 """
 
 import numpy as np
-from lib.cloudfield import CloudField
+
 from lib.cloud import Cloud
+from lib.cloudfield import CloudField
 
 
 def _make_bare_cloudfield(clouds_dict):
@@ -65,8 +66,7 @@ class TestBuildGlobalSurfaceKDTree:
         cf.build_global_surface_kdtree()
 
         assert cf.surface_points_array.shape == (2, 3)
-        np.testing.assert_array_almost_equal(
-            cf.surface_points_array, [[10, 20, 30], [40, 50, 60]])
+        np.testing.assert_array_almost_equal(cf.surface_points_array, [[10, 20, 30], [40, 50, 60]])
         assert np.all(cf.surface_point_to_cloud_id == "0-1")
 
     def test_multiple_clouds_aggregated(self):
@@ -84,11 +84,14 @@ class TestBuildGlobalSurfaceKDTree:
 
     def test_kdtree_uses_xy_only(self):
         """The KD-tree is built on X,Y only; querying returns correct indices."""
-        cloud = _make_cloud("0-1", [
-            [100, 200, 300],
-            [100, 200, 500],  # same X,Y, different Z
-            [900, 900, 300],
-        ])
+        cloud = _make_cloud(
+            "0-1",
+            [
+                [100, 200, 300],
+                [100, 200, 500],  # same X,Y, different Z
+                [900, 900, 300],
+            ],
+        )
         cf = _make_bare_cloudfield({"0-1": cloud})
         cf.build_global_surface_kdtree()
 
@@ -118,8 +121,7 @@ class TestBuildGlobalSurfaceKDTree:
         """Stress: 50 clouds with 4 points each produce 200-point tree."""
         clouds = {}
         for i in range(50):
-            pts = [[i * 100 + dx, i * 100 + dy, 500]
-                   for dx, dy in [(0, 0), (10, 0), (0, 10), (10, 10)]]
+            pts = [[i * 100 + dx, i * 100 + dy, 500] for dx, dy in [(0, 0), (10, 0), (0, 10), (10, 10)]]
             clouds[f"0-{i}"] = _make_cloud(f"0-{i}", pts)
         cf = _make_bare_cloudfield(clouds)
         cf.build_global_surface_kdtree()
