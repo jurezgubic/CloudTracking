@@ -21,7 +21,7 @@ from src.netcdf_writer import write_cloud_tracks_to_netcdf
 # Processing Options
 # =============================================================================
 output_netcdf_path = "cloud_results.nc"
-total_timesteps = 10  # Number of timesteps to process (set to -1 to process all available)
+total_timesteps = -1  # Number of timesteps to process (set to -1 to process all available)
 
 # =============================================================================
 # Cloud Definition and Tracking Configuration
@@ -99,10 +99,10 @@ config = {
     "nip_T_min": 60.0,  # Min temporal memory scale [s]
     "nip_T_max": 6000.0,  # Max temporal memory scale [s]
     # Environment ring (per-cloud surroundings) parameters
-    "env_ring_max_distance": 1,  # Max Manhattan ring distance D around cloud edge (2D)
+    "env_ring_max_distance": 4,  # Max Manhattan ring distance D around cloud edge (2D)
     "env_periodic_rings": True,  # Respect periodic boundaries when forming rings
     # Environment aloft parameters
-    "env_aloft_levels": -1,  # Number of levels above cloud top to analyze. Set to -1 for all levels!
+    "env_aloft_levels": 20,  # Number of levels above cloud top to analyze. Set to -1 for all levels!
     "env_aloft_mode": "flat",  # 'flat' (plane above max top) or 'local' (following terrain above cloud)
     "env_aloft_sampling_mode": "fixed_mean_area",  # 'exact' (cloud shape) or 'fixed_mean_area' (circle with mean cloud area)
     # Note for 'fixed_mean_area': Assumes steady-state simulation (cloud sizes don't change massively).
