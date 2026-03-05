@@ -7,21 +7,20 @@ Covers the three most complex physics code paths:
   theta_l conversion, total water, transposition)
 """
 
-import sys
 import os
-import pytest
+import sys
+
 import numpy as np
-from pathlib import Path
+import pytest
 from netCDF4 import Dataset
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from src.adapters.monc_adapter import MONCAdapter, R_D, C_PD, L_V, G
-
+from src.adapters.monc_adapter import C_PD, L_V, R_D, G, MONCAdapter
 
 # --- Grid constants for synthetic data ---
 NX, NY = 4, 4
-ZN = np.array([0.0, 500.0, 1000.0, 1500.0, 2000.0])   # scalar levels
+ZN = np.array([0.0, 500.0, 1000.0, 1500.0, 2000.0])  # scalar levels
 Z_W = np.array([0.0, 250.0, 500.0, 1000.0, 1500.0, 2000.0])  # w levels
 NZ = len(ZN)
 NZ_W = len(Z_W)
@@ -34,11 +33,11 @@ Z_THREF = np.array([0.0, 500.0, 1000.0, 1500.0, 2000.0])
 F_THREF = np.array([300.0, 301.0, 302.0, 303.5, 305.0])
 
 # Synthetic field values (MONC dimension order: x, y, z)
-TH_PERT = 1.0       # K
-P_PERT = 50.0        # Pa
-U_VAL = 2.0          # m/s
-V_VAL = -1.0         # m/s
-Q_VAPOUR = 0.015     # kg/kg
+TH_PERT = 1.0  # K
+P_PERT = 50.0  # Pa
+U_VAL = 2.0  # m/s
+V_VAL = -1.0  # m/s
+Q_VAPOUR = 0.015  # kg/kg
 Q_CLOUD_LIQUID = 0.001
 Q_RAIN = 0.0005
 Q_ICE = 0.0
@@ -62,31 +61,29 @@ f_init_pl_theta={f_str}
     path.write_text(content)
 
 
-def _write_netcdf(path, q_cloud_liquid=Q_CLOUD_LIQUID,
-                  th_pert_field=None, p_pert_field=None,
-                  w_field=None):
+def _write_netcdf(path, q_cloud_liquid=Q_CLOUD_LIQUID, th_pert_field=None, p_pert_field=None, w_field=None):
     """Write a synthetic MONC NetCDF file.
 
     All 3-D fields have MONC dimension order (time, x, y, z/zn).
     """
-    ds = Dataset(str(path), 'w', format='NETCDF4')
+    ds = Dataset(str(path), "w", format="NETCDF4")
 
-    ds.createDimension('time_series_0', 1)
-    ds.createDimension('x', NX)
-    ds.createDimension('y', NY)
-    ds.createDimension('z', NZ_W)
-    ds.createDimension('zn', NZ)
+    ds.createDimension("time_series_0", 1)
+    ds.createDimension("x", NX)
+    ds.createDimension("y", NY)
+    ds.createDimension("z", NZ_W)
+    ds.createDimension("zn", NZ)
 
     # Coordinate variables
-    z_var = ds.createVariable('z', 'f8', ('z',))
+    z_var = ds.createVariable("z", "f8", ("z",))
     z_var[:] = Z_W
-    zn_var = ds.createVariable('zn', 'f8', ('zn',))
+    zn_var = ds.createVariable("zn", "f8", ("zn",))
     zn_var[:] = ZN
 
-    def _add_3d(name, fill, dim_z='zn'):
+    def _add_3d(name, fill, dim_z="zn"):
         """Add a 3-D field with shape (1, NX, NY, len(dim_z))."""
-        nz_dim = NZ if dim_z == 'zn' else NZ_W
-        var = ds.createVariable(name, 'f8', ('time_series_0', 'x', 'y', dim_z))
+        nz_dim = NZ if dim_z == "zn" else NZ_W
+        var = ds.createVariable(name, "f8", ("time_series_0", "x", "y", dim_z))
         if isinstance(fill, np.ndarray):
             var[0, :, :, :] = fill
         else:
@@ -94,33 +91,33 @@ def _write_netcdf(path, q_cloud_liquid=Q_CLOUD_LIQUID,
         return var
 
     if th_pert_field is not None:
-        _add_3d('th', th_pert_field)
+        _add_3d("th", th_pert_field)
     else:
-        _add_3d('th', TH_PERT)
+        _add_3d("th", TH_PERT)
 
     if p_pert_field is not None:
-        _add_3d('p', p_pert_field)
+        _add_3d("p", p_pert_field)
     else:
-        _add_3d('p', P_PERT)
+        _add_3d("p", P_PERT)
 
-    _add_3d('u', U_VAL)
-    _add_3d('v', V_VAL)
+    _add_3d("u", U_VAL)
+    _add_3d("v", V_VAL)
 
     # w on staggered z-levels: linear ramp by default
     if w_field is not None:
-        _add_3d('w', w_field, dim_z='z')
+        _add_3d("w", w_field, dim_z="z")
     else:
         w_ramp = np.zeros((NX, NY, NZ_W))
         for k in range(NZ_W):
             w_ramp[:, :, k] = Z_W[k] / Z_W[-1] * 5.0  # 0..5 m/s
-        _add_3d('w', w_ramp, dim_z='z')
+        _add_3d("w", w_ramp, dim_z="z")
 
-    _add_3d('q_vapour', Q_VAPOUR)
-    _add_3d('q_cloud_liquid_mass', q_cloud_liquid)
-    _add_3d('q_rain_mass', Q_RAIN)
-    _add_3d('q_ice_mass', Q_ICE)
-    _add_3d('q_snow_mass', Q_SNOW)
-    _add_3d('q_graupel_mass', Q_GRAUPEL)
+    _add_3d("q_vapour", Q_VAPOUR)
+    _add_3d("q_cloud_liquid_mass", q_cloud_liquid)
+    _add_3d("q_rain_mass", Q_RAIN)
+    _add_3d("q_ice_mass", Q_ICE)
+    _add_3d("q_snow_mass", Q_SNOW)
+    _add_3d("q_graupel_mass", Q_GRAUPEL)
 
     ds.close()
 
@@ -134,8 +131,8 @@ def _make_adapter(tmp_path, **netcdf_kwargs):
     _write_netcdf(nc_path, **netcdf_kwargs)
 
     config = {
-        'monc_data_path': str(tmp_path),
-        'monc_config_file': str(mcf_path),
+        "monc_data_path": str(tmp_path),
+        "monc_config_file": str(mcf_path),
     }
     return MONCAdapter(config)
 
@@ -143,6 +140,7 @@ def _make_adapter(tmp_path, **netcdf_kwargs):
 # ------------------------------------------------------------------ #
 #  Fixtures                                                           #
 # ------------------------------------------------------------------ #
+
 
 @pytest.fixture
 def adapter(tmp_path):
@@ -160,6 +158,7 @@ def adapter_no_liquid(tmp_path):
 #  TestComputeReferenceProfiles                                       #
 # ------------------------------------------------------------------ #
 
+
 class TestComputeReferenceProfiles:
     """Tests for _compute_reference_profiles (hydrostatic integration)."""
 
@@ -168,8 +167,7 @@ class TestComputeReferenceProfiles:
         pref = adapter._pref_on_grid
         for i in range(1, len(pref)):
             assert pref[i] < pref[i - 1], (
-                f"pref should decrease with height: "
-                f"pref[{i-1}]={pref[i-1]:.1f}, pref[{i}]={pref[i]:.1f}"
+                f"pref should decrease with height: pref[{i - 1}]={pref[i - 1]:.1f}, pref[{i}]={pref[i]:.1f}"
             )
 
     def test_surface_pressure_matches_input(self, adapter):
@@ -181,9 +179,7 @@ class TestComputeReferenceProfiles:
     def test_thref_interpolation(self, adapter):
         adapter.get_grid_info()
         expected = np.interp(ZN, Z_THREF, F_THREF)
-        np.testing.assert_array_almost_equal(
-            adapter._thref_on_grid, expected, decimal=10
-        )
+        np.testing.assert_array_almost_equal(adapter._thref_on_grid, expected, decimal=10)
 
     def test_pressure_in_physical_range(self, adapter):
         adapter.get_grid_info()
@@ -203,8 +199,8 @@ class TestComputeReferenceProfiles:
         _write_netcdf(nc_path)
 
         config = {
-            'monc_data_path': str(tmp_path),
-            'monc_config_file': str(mcf_path),
+            "monc_data_path": str(tmp_path),
+            "monc_config_file": str(mcf_path),
         }
         adp = MONCAdapter(config)
         adp.get_grid_info()
@@ -229,6 +225,7 @@ class TestComputeReferenceProfiles:
 #  TestInterpolateW                                                   #
 # ------------------------------------------------------------------ #
 
+
 class TestInterpolateW:
     """Tests for _interpolate_w_to_scalar_levels (staggered grid)."""
 
@@ -244,8 +241,7 @@ class TestInterpolateW:
         for k in range(NZ):
             expected = slope * ZN[k]
             np.testing.assert_almost_equal(
-                result[:, :, k], expected, decimal=10,
-                err_msg=f"Linear interpolation inexact at zn={ZN[k]}"
+                result[:, :, k], expected, decimal=10, err_msg=f"Linear interpolation inexact at zn={ZN[k]}"
             )
 
     def test_constant_field_preserved(self, adapter):
@@ -268,8 +264,7 @@ class TestInterpolateW:
 
         result = adapter._interpolate_w_to_scalar_levels(w_on_z, z_w_high, ZN)
         np.testing.assert_almost_equal(
-            result[:, :, 0], 7.0, decimal=10,
-            err_msg="Should clamp to first w value below w-grid"
+            result[:, :, 0], 7.0, decimal=10, err_msg="Should clamp to first w value below w-grid"
         )
 
     def test_boundary_above(self, adapter):
@@ -282,8 +277,7 @@ class TestInterpolateW:
 
         result = adapter._interpolate_w_to_scalar_levels(w_on_z, z_w_low, ZN)
         np.testing.assert_almost_equal(
-            result[:, :, -1], 9.0, decimal=10,
-            err_msg="Should clamp to last w value above w-grid"
+            result[:, :, -1], 9.0, decimal=10, err_msg="Should clamp to last w value above w-grid"
         )
 
 
@@ -291,29 +285,27 @@ class TestInterpolateW:
 #  TestLoadTimestep                                                   #
 # ------------------------------------------------------------------ #
 
+
 class TestLoadTimestep:
     """Tests for load_timestep — full conversion pipeline."""
 
     def test_output_has_all_required_fields(self, adapter):
         data = adapter.load_timestep(0)
-        required = ['l', 'u', 'v', 'w', 'p', 'theta_l', 'q_t', 'r',
-                     'xt', 'yt', 'zt']
+        required = ["l", "u", "v", "w", "p", "theta_l", "q_t", "r", "xt", "yt", "zt"]
         for key in required:
             assert key in data, f"Missing required field: {key}"
 
     def test_output_shape_is_zyx(self, adapter):
         data = adapter.load_timestep(0)
         expected_shape = (NZ, NY, NX)
-        for key in ['l', 'u', 'v', 'w', 'p', 'theta_l', 'q_t', 'r']:
-            assert data[key].shape == expected_shape, (
-                f"{key} shape {data[key].shape} != expected {expected_shape}"
-            )
+        for key in ["l", "u", "v", "w", "p", "theta_l", "q_t", "r"]:
+            assert data[key].shape == expected_shape, f"{key} shape {data[key].shape} != expected {expected_shape}"
 
     def test_coordinate_arrays(self, adapter):
         data = adapter.load_timestep(0)
-        assert len(data['xt']) == NX
-        assert len(data['yt']) == NY
-        assert len(data['zt']) == NZ
+        assert len(data["xt"]) == NX
+        assert len(data["yt"]) == NY
+        assert len(data["zt"]) == NZ
 
     def test_theta_l_equals_theta_when_no_liquid(self, adapter_no_liquid):
         """With q_cloud_liquid=0, theta_l must equal reconstructed theta."""
@@ -324,8 +316,10 @@ class TestLoadTimestep:
         # After transpose: data['theta_l'] has shape (nz, ny, nx)
         for k in range(NZ):
             np.testing.assert_almost_equal(
-                data['theta_l'][k, :, :], expected_theta[k], decimal=6,
-                err_msg=f"theta_l != theta at level {k} when q_l=0"
+                data["theta_l"][k, :, :],
+                expected_theta[k],
+                decimal=6,
+                err_msg=f"theta_l != theta at level {k} when q_l=0",
             )
 
     def test_theta_l_conversion(self, adapter):
@@ -340,8 +334,7 @@ class TestLoadTimestep:
             Pi_k = (p_k / P0) ** (R_D / C_PD)
             expected_theta_l = theta_k - (L_V / C_PD) * (Q_CLOUD_LIQUID / Pi_k)
             np.testing.assert_almost_equal(
-                data['theta_l'][k, 0, 0], expected_theta_l, decimal=4,
-                err_msg=f"theta_l incorrect at level {k}"
+                data["theta_l"][k, 0, 0], expected_theta_l, decimal=4, err_msg=f"theta_l incorrect at level {k}"
             )
 
     def test_total_water_composition(self, adapter):
@@ -349,22 +342,16 @@ class TestLoadTimestep:
         data = adapter.load_timestep(0)
         expected_qt = Q_VAPOUR + Q_CLOUD_LIQUID + Q_ICE + Q_SNOW + Q_GRAUPEL
         np.testing.assert_almost_equal(
-            data['q_t'], expected_qt, decimal=10,
-            err_msg="q_t should equal sum of vapour + cloud + ice species"
+            data["q_t"], expected_qt, decimal=10, err_msg="q_t should equal sum of vapour + cloud + ice species"
         )
 
     def test_rain_excluded_from_total_water(self, adapter):
         """Rain is stored in 'r', not added to q_t."""
         data = adapter.load_timestep(0)
-        np.testing.assert_almost_equal(
-            data['r'], Q_RAIN, decimal=10,
-            err_msg="Rain field should contain q_rain values"
-        )
+        np.testing.assert_almost_equal(data["r"], Q_RAIN, decimal=10, err_msg="Rain field should contain q_rain values")
         # q_t should NOT include rain
         expected_qt_with_rain = Q_VAPOUR + Q_CLOUD_LIQUID + Q_RAIN
-        assert not np.allclose(data['q_t'], expected_qt_with_rain), (
-            "q_t should not include rain"
-        )
+        assert not np.allclose(data["q_t"], expected_qt_with_rain), "q_t should not include rain"
 
     def test_pressure_reconstruction(self, adapter):
         """p = pref + p_pert, verified against known perturbation."""
@@ -373,8 +360,7 @@ class TestLoadTimestep:
         for k in range(NZ):
             expected_p = pref[k] + P_PERT
             np.testing.assert_almost_equal(
-                data['p'][k, 0, 0], expected_p, decimal=4,
-                err_msg=f"Pressure incorrect at level {k}"
+                data["p"][k, 0, 0], expected_p, decimal=4, err_msg=f"Pressure incorrect at level {k}"
             )
 
     def test_transposition_correctness(self, tmp_path):
@@ -393,7 +379,7 @@ class TestLoadTimestep:
         Pi_marker = (p_marker / P0) ** (R_D / C_PD)
         expected_marker = (thref[2] + 99.0) - (L_V / C_PD) * (Q_CLOUD_LIQUID / Pi_marker)
 
-        actual = data['theta_l'][2, 1, 0]
+        actual = data["theta_l"][2, 1, 0]
         assert actual == pytest.approx(expected_marker, rel=1e-6), (
             f"Transposition error: theta_l[2,1,0]={actual}, expected {expected_marker}"
         )
@@ -402,13 +388,14 @@ class TestLoadTimestep:
         p_other = pref[0] + P_PERT
         Pi_other = (p_other / P0) ** (R_D / C_PD)
         non_marker = (thref[0] + TH_PERT) - (L_V / C_PD) * (Q_CLOUD_LIQUID / Pi_other)
-        actual_other = data['theta_l'][0, 0, 0]
+        actual_other = data["theta_l"][0, 0, 0]
         assert actual_other == pytest.approx(non_marker, rel=1e-6)
 
 
 # ------------------------------------------------------------------ #
 #  TestThetaLConversion                                               #
 # ------------------------------------------------------------------ #
+
 
 class TestThetaLConversion:
     """Focused physics validation of the theta_l conversion."""
@@ -419,9 +406,7 @@ class TestThetaLConversion:
         thref = adapter._thref_on_grid
         for k in range(NZ):
             theta_k = thref[k] + TH_PERT
-            assert np.all(data['theta_l'][k, :, :] < theta_k), (
-                f"theta_l should be less than theta at level {k}"
-            )
+            assert np.all(data["theta_l"][k, :, :] < theta_k), f"theta_l should be less than theta at level {k}"
 
     def test_theta_l_magnitude(self, adapter):
         """For 1 g/kg liquid at ~1 bar, cooling is roughly L_v*q_l/c_pd ~ 2.5 K."""
@@ -430,12 +415,12 @@ class TestThetaLConversion:
 
         # Check at lowest level where pressure is closest to p0
         theta_0 = thref[0] + TH_PERT
-        theta_l_0 = data['theta_l'][0, 0, 0]
+        theta_l_0 = data["theta_l"][0, 0, 0]
         cooling = theta_0 - theta_l_0
 
         # Exact: (L_V / C_PD) * (q_l / Pi), with Pi ~ 1 at surface
         rough_cooling = L_V / C_PD * Q_CLOUD_LIQUID  # ~2.49 K
         assert cooling == pytest.approx(rough_cooling, rel=0.05), (
             f"Cooling {cooling:.3f} K should be ~{rough_cooling:.3f} K "
-            f"for {Q_CLOUD_LIQUID*1000:.1f} g/kg liquid at surface"
+            f"for {Q_CLOUD_LIQUID * 1000:.1f} g/kg liquid at surface"
         )

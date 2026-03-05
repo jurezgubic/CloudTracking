@@ -7,13 +7,13 @@ and edge cases (inactive cloud, empty surface points).
 """
 
 import numpy as np
+
 from lib.cloud import Cloud
 from lib.cloudtracker import CloudTracker
 from tests.conftest import MockCloudField
 
 
-def _make_match_cloud(cloud_id, location, surface_points,
-                      mean_u=0.0, mean_v=0.0, mean_w=0.0, is_active=True):
+def _make_match_cloud(cloud_id, location, surface_points, mean_u=0.0, mean_v=0.0, mean_w=0.0, is_active=True):
     """Create a Cloud tailored for is_match tests (scalar velocities)."""
     if not isinstance(surface_points, np.ndarray):
         surface_points = np.array(surface_points, dtype=np.float32)
@@ -95,8 +95,8 @@ class TestCloudMatching:
         tr = self._tracker(tracker_config)
 
         cloud_t0 = _make_match_cloud(
-            1, (100, 100, 500), [(100, 100, 500)],
-            mean_u=0.4)  # 0.4 m/s * 60 s = 24 m displacement
+            1, (100, 100, 500), [(100, 100, 500)], mean_u=0.4
+        )  # 0.4 m/s * 60 s = 24 m displacement
         cloud_t1 = _make_match_cloud(2, (124, 100, 500), [(124, 100, 500)])
         cf = MockCloudField({cloud_t1.cloud_id: cloud_t1})
 
@@ -107,8 +107,8 @@ class TestCloudMatching:
         tr = self._tracker(tracker_config)
 
         cloud_t0 = _make_match_cloud(
-            1, (100, 100, 500), [(100, 100, 500)],
-            mean_w=0.3)  # 0.3 m/s * 60 s = 18 m vertical
+            1, (100, 100, 500), [(100, 100, 500)], mean_w=0.3
+        )  # 0.3 m/s * 60 s = 18 m vertical
         cloud_t1 = _make_match_cloud(2, (100, 100, 518), [(100, 100, 518)])
         cf = MockCloudField({cloud_t1.cloud_id: cloud_t1})
 
@@ -128,8 +128,7 @@ class TestCloudMatching:
         """Inactive clouds are not matched."""
         tr = self._tracker(tracker_config)
 
-        cloud_t0 = _make_match_cloud(
-            1, (100, 100, 500), [(100, 100, 500)], is_active=False)
+        cloud_t0 = _make_match_cloud(1, (100, 100, 500), [(100, 100, 500)], is_active=False)
         cloud_t1 = _make_match_cloud(2, (100, 100, 500), [(100, 100, 500)])
         cf = MockCloudField({cloud_t1.cloud_id: cloud_t1})
 
@@ -139,9 +138,7 @@ class TestCloudMatching:
         """Clouds with empty surface points don\'t match."""
         tr = self._tracker(tracker_config)
 
-        cloud_t0 = _make_match_cloud(
-            1, (100, 100, 500),
-            np.array([], dtype=np.float32).reshape(0, 3))
+        cloud_t0 = _make_match_cloud(1, (100, 100, 500), np.array([], dtype=np.float32).reshape(0, 3))
         cloud_t1 = _make_match_cloud(2, (100, 100, 500), [(100, 100, 500)])
         cf = MockCloudField({cloud_t1.cloud_id: cloud_t1})
 

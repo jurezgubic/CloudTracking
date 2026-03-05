@@ -1,12 +1,9 @@
-import utils.plotting_utils as plotting_utils
-import math
 import numpy as np
-import gc
-from memory_profiler import profile
-from scipy.spatial import cKDTree
+
 
 class CloudTracker:
-    """"Class to track clouds over time."""
+    """ "Class to track clouds over time."""
+
     def __init__(self, config):
         self.cloud_tracks = {}
         self.config = config
@@ -17,21 +14,21 @@ class CloudTracker:
         self.domain_size_y = None
         self.tainted_tracks = set()  # Store IDs of tracks with incomplete lifecycles
         self.track_id_to_index = {}  # Maps track_id to stable NetCDF index
-        self.next_index = 0          # Next available NetCDF index
+        self.next_index = 0  # Next available NetCDF index
 
     def update_tracks(self, current_cloud_field, zt, xt, yt):
         """Update the cloud tracks with the current cloud field."""
         self.zt = zt
         self.xt = xt
         self.yt = yt
-        
+
         # Calculate domain dimensions (for use in boundary handling)
         if self.domain_size_x is None:
-            self.domain_size_x = (self.xt[-1] - self.xt[0]) + self.config['horizontal_resolution']
-            self.domain_size_y = (self.yt[-1] - self.yt[0]) + self.config['horizontal_resolution']
-        
+            self.domain_size_x = (self.xt[-1] - self.xt[0]) + self.config["horizontal_resolution"]
+            self.domain_size_y = (self.yt[-1] - self.yt[0]) + self.config["horizontal_resolution"]
+
         new_matched_clouds = set()
-        
+
         # Dictionary to track cloud inheritance
         cloud_inheritance = {}
 
@@ -50,21 +47,21 @@ class CloudTracker:
                 self.cloud_tracks[cloud_id] = [cloud]
         else:
             # Log whether pre-filtering is enabled and if fallback is allowed
-            if self.config.get('use_pre_filtering', True):
-                if self.config.get('switch_prefilter_fallback', True):
+            if self.config.get("use_pre_filtering", True):
+                if self.config.get("switch_prefilter_fallback", True):
                     print("Using centroid pre-filtering (fallback to full search: ON)")
                 else:
                     print("Using centroid pre-filtering (fallback to full search: OFF)")
             else:
                 print("Pre-filtering disabled - checking all possible matches")
-                
+
             # Pre-filter potential matches considering periodic boundaries
             potential_matches = self.pre_filter_cloud_matches(current_cloud_field)
-            
+
             # FIRST PASS: Process pre-filtered matches
             for track_id, candidate_cloud_ids in potential_matches.items():
                 last_cloud_in_track = self.cloud_tracks[track_id][-1]
-                
+
                 # Only check pre-filtered candidate clouds
                 for cloud_id in candidate_cloud_ids:
                     cloud = current_cloud_field.clouds[cloud_id]
@@ -72,7 +69,7 @@ class CloudTracker:
                         if cloud_id not in cloud_inheritance:
                             cloud_inheritance[cloud_id] = []
                         cloud_inheritance[cloud_id].append((last_cloud_in_track, track_id))
-            
+
             # SECOND PASS: Handle merges with constrained assignment.
             # Each track may win at most one merge per timestep to prevent
             # multiple clouds being appended to the same track.
@@ -81,17 +78,19 @@ class CloudTracker:
 
             # Sort merge clouds by number of parents (descending) so that the
             # most-contested merges are resolved first.
-            sorted_merge_ids = sorted(merge_candidates.keys(),
-                                      key=lambda cid: len(merge_candidates[cid]),
-                                      reverse=True)
+            sorted_merge_ids = sorted(merge_candidates.keys(), key=lambda cid: len(merge_candidates[cid]), reverse=True)
 
             # Merge winner criterion: 'age' (default) picks oldest parent;
             # 'size' picks largest parent by cell count.
-            merge_criterion = self.config.get('merge_winner_criterion', 'age')
-            if merge_criterion == 'size':
-                _merge_sort_key = lambda x: (x[0].size, x[0].age)
+            merge_criterion = self.config.get("merge_winner_criterion", "age")
+            if merge_criterion == "size":
+
+                def _merge_sort_key(x):
+                    return (x[0].size, x[0].age)
             else:
-                _merge_sort_key = lambda x: (x[0].age, x[0].size)
+
+                def _merge_sort_key(x):
+                    return (x[0].age, x[0].size)
 
             for cloud_id in sorted_merge_ids:
                 parent_list = merge_candidates[cloud_id]
@@ -127,7 +126,7 @@ class CloudTracker:
                 cloud.merges_count += 1
 
                 # Record which other tracks merged into this cloud
-                for parent, parent_track_id in parent_list:
+                for _, parent_track_id in parent_list:
                     if parent_track_id != winner_track_id:
                         cloud.merged_with.append(parent_track_id)
 
@@ -139,18 +138,18 @@ class CloudTracker:
                 for parent, parent_track_id in parent_list:
                     if parent_track_id != winner_track_id:
                         parent.merged_into = winner_track_id
-            
+
             # THIRD PASS: Process regular matches and splits
             # Identify potential splits: count ALL children per track,
             # including children that are merge clouds, so that simultaneous
             # split+merge scenarios are detected correctly.
             potential_splits = {}
             for cloud_id, parent_list in cloud_inheritance.items():
-                for parent, parent_track_id in parent_list:
+                for _, parent_track_id in parent_list:
                     if parent_track_id not in potential_splits:
                         potential_splits[parent_track_id] = []
                     potential_splits[parent_track_id].append(cloud_id)
-            
+
             # Process splits - a split occurs when one parent has multiple children
             for parent_track_id, child_cloud_ids in potential_splits.items():
                 if len(child_cloud_ids) > 1:  # More than one child = split
@@ -160,10 +159,10 @@ class CloudTracker:
                             # Mark as split
                             child_cloud.splits_count += 1
                             child_cloud.split_from = parent_track_id
-                            
+
                             # Count splits for reporting
                             splits_count += 1
-            
+
             for track_id, track in list(self.cloud_tracks.items()):
                 last_cloud_in_track = track[-1]
                 if not last_cloud_in_track.is_active:
@@ -177,7 +176,7 @@ class CloudTracker:
                 candidate_children = []
                 for cloud_id, cloud in current_cloud_field.clouds.items():
                     if cloud_id not in new_matched_clouds and cloud_id in cloud_inheritance:
-                        for parent, parent_track_id in cloud_inheritance[cloud_id]:
+                        for _, parent_track_id in cloud_inheritance[cloud_id]:
                             if parent_track_id == track_id:
                                 candidate_children.append((cloud_id, cloud))
                                 break
@@ -207,7 +206,7 @@ class CloudTracker:
                     # Mark as inactive — no surviving children found.
                     # This includes merge losers that had no other children.
                     last_cloud_in_track.is_active = False
-            
+
             # Handle remaining fragments (splits and new clouds)
             for cloud_id, cloud in current_cloud_field.clouds.items():
                 if cloud_id not in new_matched_clouds:
@@ -228,7 +227,7 @@ class CloudTracker:
                     else:
                         # This is a genuinely new cloud
                         cloud.age = 0
-                    
+
                     # Start a new track
                     self.cloud_tracks[cloud_id] = [cloud]
 
@@ -237,7 +236,7 @@ class CloudTracker:
         matched_clouds_count = 0
         inactive_clouds_count = 0
 
-        for track_id, track in self.cloud_tracks.items():
+        for _, track in self.cloud_tracks.items():
             last_cloud = track[-1]
             if not last_cloud.is_active:
                 inactive_clouds_count += 1
@@ -247,10 +246,17 @@ class CloudTracker:
                 else:
                     matched_clouds_count += 1
 
-        active_tracks_count = sum(1 for track in self.cloud_tracks.values() if track[-1].is_active and track[-1].timestep == current_cloud_field.timestep)
+        active_tracks_count = sum(
+            1
+            for track in self.cloud_tracks.values()
+            if track[-1].is_active and track[-1].timestep == current_cloud_field.timestep
+        )
         cumulative_inactive = sum(1 for track in self.cloud_tracks.values() if not track[-1].is_active)
-        ended_this_step = sum(1 for track in self.cloud_tracks.values()
-                              if (not track[-1].is_active) and track[-1].timestep == current_cloud_field.timestep)
+        ended_this_step = sum(
+            1
+            for track in self.cloud_tracks.values()
+            if (not track[-1].is_active) and track[-1].timestep == current_cloud_field.timestep
+        )
 
         # After tracks are updated for this timestep, compute accumulated NIP
         try:
@@ -272,30 +278,30 @@ class CloudTracker:
         Update accumulated NIP for each active track at the current timestep.
         Uses exponential memory with time scale T(z,t) from current field.
         """
-        T = getattr(current_cloud_field, 'nip_T_per_level', None)
+        T = getattr(current_cloud_field, "nip_T_per_level", None)
         if T is None:
             return
-        dt = float(self.config.get('timestep_duration', 60.0))
+        dt = float(self.config.get("timestep_duration", 60.0))
         # Build per-level decay; where T is not defined (NaN or <=0), set decay=0 (no memory)
         T_arr = np.asarray(T, dtype=float)
         decay = np.zeros_like(T_arr)
         mask = np.isfinite(T_arr) & (T_arr > 0)
         decay[mask] = np.exp(-dt / T_arr[mask])
 
-        for track_id, track in self.cloud_tracks.items():
+        for _track_id, track in self.cloud_tracks.items():
             if not track:
                 continue
             last = track[-1]
             # Only process clouds from the current timestep
             if last.timestep != current_cloud_field.timestep:
                 continue
-            nip_inst = getattr(last, 'nip_per_level', None)
+            nip_inst = getattr(last, "nip_per_level", None)
             if nip_inst is None:
                 continue
             # If previous state exists (track length > 1), carry it forward
             if len(track) >= 2:
                 prev = track[-2]
-                prev_acc = getattr(prev, 'nip_acc_per_level', None)
+                prev_acc = getattr(prev, "nip_acc_per_level", None)
             else:
                 prev_acc = None
 
@@ -317,14 +323,19 @@ class CloudTracker:
     # This function is deprecated by the more complex logic in update_tracks
     # but is kept here for reference or simpler tracking scenarios.
     def match_clouds(self, current_cloud_field):
-        """ Match clouds from the current cloud field to the existing tracks. """
+        """Match clouds from the current cloud field to the existing tracks."""
         matched_clouds = set()
-        for track_id, track in self.cloud_tracks.items(): # Check each existing track for a match in the current cloud field
-            last_cloud_in_track = track[-1] # Get the last cloud in the track
-            for cloud_id, cloud in current_cloud_field.clouds.items(): # Check if the cloud is a match
-                if cloud_id not in matched_clouds and self.is_match(cloud, last_cloud_in_track): # If the cloud is a match
-                    self.cloud_tracks[track_id].append(cloud) # Add the cloud to the track
-                    matched_clouds.add(cloud_id) # Mark the cloud as matched
+        for (
+            track_id,
+            track,
+        ) in self.cloud_tracks.items():  # Check each existing track for a match in the current cloud field
+            last_cloud_in_track = track[-1]  # Get the last cloud in the track
+            for cloud_id, cloud in current_cloud_field.clouds.items():  # Check if the cloud is a match
+                if cloud_id not in matched_clouds and self.is_match(
+                    cloud, last_cloud_in_track
+                ):  # If the cloud is a match
+                    self.cloud_tracks[track_id].append(cloud)  # Add the cloud to the track
+                    matched_clouds.add(cloud_id)  # Mark the cloud as matched
                     break
             else:
                 # If no match is found, consider the cloud has dissipated or is out of bounds
@@ -340,7 +351,7 @@ class CloudTracker:
         """
         Checks if a cloud in the current timestep matches a cloud from the previous timestep
         by searching for overlapping SURFACE points within a cylindrical volume.
-        
+
         Args:
             cloud: Cloud object from current timestep
             last_cloud_in_track: Cloud object from previous timestep
@@ -349,15 +360,15 @@ class CloudTracker:
         # --- 1. Validation and Threshold Calculation ---
         if not last_cloud_in_track.is_active or not last_cloud_in_track.surface_points.any():
             return False
-        
+
         if current_cloud_field.surface_points_kdtree is None:
             return False
 
-        timestep_duration = self.config['timestep_duration']
-        
+        timestep_duration = self.config["timestep_duration"]
+
         # The safety factor creates a buffer around the predicted location.
         # It accounts for the cloud's acceleration/deceleration between timesteps.
-        dynamic_safety_factor = self.config.get('match_safety_factor_dynamic', 2.0) 
+        dynamic_safety_factor = self.config.get("match_safety_factor_dynamic", 2.0)
 
         # --- Calculate a dynamic search radius based on the cloud's OWN velocity. ---
         # This ensures the search area is proportional to the cloud's specific momentum.
@@ -368,20 +379,24 @@ class CloudTracker:
 
         horizontal_threshold = max(u_abs, v_abs) * timestep_duration * dynamic_safety_factor
         vertical_threshold = w_abs * timestep_duration * dynamic_safety_factor
-        
+
         # Ensure the threshold is at least one grid cell to handle stationary clouds.
-        horizontal_threshold = max(horizontal_threshold, self.config['min_h_match_factor'] * self.config['horizontal_resolution'])
-        vertical_threshold = max(vertical_threshold, self.config['min_v_match_factor'] * self.config['horizontal_resolution'])
+        horizontal_threshold = max(
+            horizontal_threshold, self.config["min_h_match_factor"] * self.config["horizontal_resolution"]
+        )
+        vertical_threshold = max(
+            vertical_threshold, self.config["min_v_match_factor"] * self.config["horizontal_resolution"]
+        )
 
         # --- 2. Prepare Point Sets and Apply Drift (Vectorized) ---
         last_points = last_cloud_in_track.surface_points
-        
+
         # --- Apply drift to previous cloud points ---
         dx = last_cloud_in_track.mean_u * timestep_duration
         dy = last_cloud_in_track.mean_v * timestep_duration
         dz = last_cloud_in_track.mean_w * timestep_duration
         adjusted_points = last_points + [dx, dy, dz]
-        
+
         # --- 3. Handle Cyclic Boundaries (Vectorized) ---
         points_to_query = [adjusted_points]
         # Check and append points for each boundary crossing scenario
@@ -393,17 +408,17 @@ class CloudTracker:
             points_to_query.append(adjusted_points + [0, self.domain_size_y, 0])
         if np.any(adjusted_points[:, 1] > self.yt[-1] - horizontal_threshold):
             points_to_query.append(adjusted_points - [0, self.domain_size_y, 0])
-        
+
         all_query_points = np.vstack(points_to_query)
-        
+
         # --- 4. Query the pre-built global KD-tree ---
         nearby_indices_list = current_cloud_field.surface_points_kdtree.query_ball_point(
             all_query_points[:, :2], r=horizontal_threshold
         )
-        
+
         # --- 5. Check for matches with the current cloud ID ---
         cloud_id = cloud.cloud_id
-        min_overlap = int(self.config.get('min_surface_overlap_points', 1))
+        min_overlap = int(self.config.get("min_surface_overlap_points", 1))
         # Accumulate unique indices of overlapping points to avoid double-counting
         overlapping_indices = set()
 
@@ -442,13 +457,13 @@ class CloudTracker:
         """
         Pre-filter potential cloud matches based on centroid proximity to reduce
         the number of expensive is_match() calls, while properly handling periodic boundaries.
-        
+
         When pre-filtering is disabled, returns all possible combinations.
-        
+
         Returns a dictionary mapping track_ids to lists of candidate cloud_ids.
         """
         # Check if pre-filtering is disabled in config
-        if not self.config.get('use_pre_filtering', True):
+        if not self.config.get("use_pre_filtering", True):
             # Return all possible combinations when disabled
             potential_matches = {}
             for track_id, track in self.cloud_tracks.items():
@@ -457,92 +472,92 @@ class CloudTracker:
                     # All current clouds are potential matches
                     potential_matches[track_id] = list(current_cloud_field.clouds.keys())
             return potential_matches
-        
+
         # Original pre-filtering logic continues below
         potential_matches = {}
-        
+
         # Skip if no tracks or clouds exist
         if not self.cloud_tracks or not current_cloud_field.clouds:
             return potential_matches
-        
+
         # Create arrays of cloud centroids
         prev_centroids = []
         prev_track_ids = []
-        
+
         # Get centroids of active clouds from previous timestep
         for track_id, track in self.cloud_tracks.items():
             last_cloud = track[-1]
             if last_cloud.is_active:
                 prev_centroids.append(last_cloud.location)
                 prev_track_ids.append(track_id)
-        
+
         # Skip if no active clouds
         if not prev_centroids:
             return potential_matches
-            
+
         prev_centroids = np.array(prev_centroids)
-        
+
         # Get current cloud centroids
         curr_centroids = []
         curr_cloud_ids = []
-        
+
         for cloud_id, cloud in current_cloud_field.clouds.items():
             curr_centroids.append(cloud.location)
             curr_cloud_ids.append(cloud_id)
-        
+
         # Skip if no current clouds
         if not curr_centroids:
             return potential_matches
-            
+
         curr_centroids = np.array(curr_centroids)
-        
+
         # Physics-based search radius calculation from config
-        timestep_duration = self.config['timestep_duration']
-        max_speed = self.config.get('max_expected_cloud_speed')
-        
+        timestep_duration = self.config["timestep_duration"]
+        max_speed = self.config.get("max_expected_cloud_speed")
+
         # Apply safety factor for the search radius from config
-        safety_factor = self.config.get('bounding_box_safety_factor')
+        safety_factor = self.config.get("bounding_box_safety_factor")
         search_radius = max_speed * timestep_duration * safety_factor
-        
+
         # For each previous cloud, find potential matches
         for i, prev_centroid in enumerate(prev_centroids):
             track_id = prev_track_ids[i]
             candidate_ids = []
-            
+
             # Extract coordinates for better readability
             px, py, pz = prev_centroid
-            
+
             # Check each current cloud, considering periodic boundaries
-            for j, (curr_centroid, cloud_id) in enumerate(zip(curr_centroids, curr_cloud_ids)):
+            for _j, (curr_centroid, cloud_id) in enumerate(zip(curr_centroids, curr_cloud_ids)):
                 cx, cy, cz = curr_centroid
-                
+
                 # Handle x-direction periodic boundary
                 dx = abs(cx - px)
                 if dx > self.domain_size_x / 2:
                     dx = self.domain_size_x - dx
-                    
+
                 # Handle y-direction periodic boundary
                 dy = abs(cy - py)
                 if dy > self.domain_size_y / 2:
                     dy = self.domain_size_y - dy
-                    
+
                 # Direct distance in z (non-periodic)
                 dz = abs(cz - pz)
-                
+
                 # Calculate effective horizontal and vertical distances
-                horiz_dist = np.sqrt(dx*dx + dy*dy)
+                horiz_dist = np.sqrt(dx * dx + dy * dy)
                 vert_dist = dz
-                
+
                 # Check if within search thresholds
                 if horiz_dist <= search_radius and vert_dist <= search_radius:
                     candidate_ids.append(cloud_id)
-            
+
             # Optional fallback: if no centroid-based candidates, try full domain
             # Controlled by config['switch_prefilter_fallback'] (default True)
             if (
                 not candidate_ids
-                and self.config.get('use_pre_filtering', True)
-                and self.config.get('switch_prefilter_fallback', True)
+                and self.config.get("use_pre_filtering", True)
+                and self.config.get("switch_prefilter_fallback", True)
             ):
                 candidate_ids = list(current_cloud_field.clouds.keys())
 
@@ -551,7 +566,7 @@ class CloudTracker:
 
         total_candidates = sum(len(candidates) for candidates in potential_matches.values())
         print(f"Pre-filtering found {total_candidates} potential matches across {len(potential_matches)} active tracks")
-    
+
         return potential_matches
 
     def get_tracks(self):

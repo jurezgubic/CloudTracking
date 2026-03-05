@@ -1,5 +1,3 @@
-import numpy as np
-
 # Constants
 R_d = 287.05  # J/kg/K gas constant for dry air
 R_v = 461.51  # J/kg/K gas constant for water vapor
@@ -13,4 +11,3 @@ g = 9.81  # m/s^2 acceleration due to gravity
 
 # Composite constants
 epsilon = R_d / R_v
-

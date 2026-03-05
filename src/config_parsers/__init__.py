@@ -2,4 +2,4 @@
 
 from .mcf_parser import MONCConfigParser
 
-__all__ = ['MONCConfigParser']
+__all__ = ["MONCConfigParser"]

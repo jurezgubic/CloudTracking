@@ -1,7 +1,9 @@
 import unittest
+
 import numpy as np
-from utils.physics import compute_buoyancy_3d, P_0, R_D, C_PD, L_V, EPSILON, G
+
 from lib.cloudfield import CloudField
+from utils.physics import compute_buoyancy_3d
 
 
 class TestComputeBuoyancy3D(unittest.TestCase):
@@ -73,35 +75,35 @@ class TestBuoyancyCriterionInIdentifyRegions(unittest.TestCase):
 
     def _make_config(self, b_switch=False, b_condition=0.0):
         return {
-            'distance_threshold': 100.0,
-            'w_switch': False,
-            'b_switch': b_switch,
-            'b_condition': b_condition,
-            'l_condition': 1e-4,
-            'min_size': 1,
-            'horizontal_resolution': 25.0,
-            'plot_switch': False,
-            'cloud_base_altitude': 0.0,
-            'env_aloft_levels': -1,
-            'env_aloft_mode': 'flat',
-            'env_aloft_sampling_mode': 'exact',
-            'env_ring_max_distance': 1,
-            'env_periodic_rings': False,
-            'match_shell_layers': 1,
-            'base_scan_levels': 3,
-            'base_increase_threshold': 1.5,
-            'cloud_batch_size': 50,
-            'nip_gamma': 0.3,
-            'nip_f': 3.0,
-            'nip_Lh_min': 100.0,
-            'nip_Lh_max': 2000.0,
-            'nip_T_min': 60.0,
-            'nip_T_max': 6000.0,
+            "distance_threshold": 100.0,
+            "w_switch": False,
+            "b_switch": b_switch,
+            "b_condition": b_condition,
+            "l_condition": 1e-4,
+            "min_size": 1,
+            "horizontal_resolution": 25.0,
+            "plot_switch": False,
+            "cloud_base_altitude": 0.0,
+            "env_aloft_levels": -1,
+            "env_aloft_mode": "flat",
+            "env_aloft_sampling_mode": "exact",
+            "env_ring_max_distance": 1,
+            "env_periodic_rings": False,
+            "match_shell_layers": 1,
+            "base_scan_levels": 3,
+            "base_increase_threshold": 1.5,
+            "cloud_batch_size": 50,
+            "nip_gamma": 0.3,
+            "nip_f": 3.0,
+            "nip_Lh_min": 100.0,
+            "nip_Lh_max": 2000.0,
+            "nip_T_min": 60.0,
+            "nip_T_max": 6000.0,
         }
 
     def _make_data(self, nz=10, ny=20, nx=20):
         """Create baseline 3D fields: uniform environment, no clouds."""
-        l = np.zeros((nz, ny, nx))
+        lwc = np.zeros((nz, ny, nx))
         u = np.zeros((nz, ny, nx))
         v = np.zeros((nz, ny, nx))
         w = np.zeros((nz, ny, nx))
@@ -112,58 +114,58 @@ class TestBuoyancyCriterionInIdentifyRegions(unittest.TestCase):
         xt = np.arange(nx) * 25.0
         yt = np.arange(ny) * 25.0
         zt = np.arange(nz) * 100.0
-        return l, u, v, w, p, theta_l, q_t, r, xt, yt, zt
+        return lwc, u, v, w, p, theta_l, q_t, r, xt, yt, zt
 
     def test_b_switch_false_keeps_all_clouds(self):
         """With b_switch=False, all cloudy points are kept regardless of buoyancy."""
         config = self._make_config(b_switch=False)
-        l, u, v, w, p, theta_l, q_t, r, xt, yt, zt = self._make_data()
+        lwc, u, v, w, p, theta_l, q_t, r, xt, yt, zt = self._make_data()
 
         # Two cloud columns: one warm (buoyant), one cold (negatively buoyant)
-        l[3:6, 5, 5] = 0.001
-        l[3:6, 15, 15] = 0.001
-        theta_l[:, 5, 5] = 303.0   # warm
+        lwc[3:6, 5, 5] = 0.001
+        lwc[3:6, 15, 15] = 0.001
+        theta_l[:, 5, 5] = 303.0  # warm
         theta_l[:, 15, 15] = 297.0  # cold
 
-        cf = CloudField(l, u, v, w, p, theta_l, q_t, r, 0, config, xt, yt, zt)
+        cf = CloudField(lwc, u, v, w, p, theta_l, q_t, r, 0, config, xt, yt, zt)
         # Both clouds should be present
         self.assertEqual(len(cf.clouds), 2)
 
     def test_b_switch_true_excludes_negatively_buoyant(self):
         """With b_switch=True and b_condition=0, negatively buoyant cloud is excluded."""
         config = self._make_config(b_switch=True, b_condition=0.0)
-        l, u, v, w, p, theta_l, q_t, r, xt, yt, zt = self._make_data()
+        lwc, u, v, w, p, theta_l, q_t, r, xt, yt, zt = self._make_data()
 
         # Buoyant cloud column
-        l[3:6, 5, 5] = 0.001
+        lwc[3:6, 5, 5] = 0.001
         theta_l[:, 5, 5] = 305.0
 
         # Negatively buoyant cloud column
-        l[3:6, 15, 15] = 0.001
+        lwc[3:6, 15, 15] = 0.001
         theta_l[:, 15, 15] = 295.0
 
-        cf = CloudField(l, u, v, w, p, theta_l, q_t, r, 0, config, xt, yt, zt)
+        cf = CloudField(lwc, u, v, w, p, theta_l, q_t, r, 0, config, xt, yt, zt)
         # Only the buoyant cloud should survive
         self.assertEqual(len(cf.clouds), 1)
 
     def test_b_condition_threshold(self):
         """b_condition threshold controls minimum allowed buoyancy."""
-        l, u, v, w, p, theta_l, q_t, r, xt, yt, zt = self._make_data()
+        lwc, u, v, w, p, theta_l, q_t, r, xt, yt, zt = self._make_data()
 
         # Single slightly warm cloud
-        l[3:6, 5, 5] = 0.001
+        lwc[3:6, 5, 5] = 0.001
         theta_l[:, 5, 5] = 300.5  # slightly warm
 
         # With a low threshold it passes
         config_low = self._make_config(b_switch=True, b_condition=0.0)
-        cf_low = CloudField(l.copy(), u, v, w, p, theta_l.copy(), q_t, r, 0, config_low, xt, yt, zt)
+        cf_low = CloudField(lwc.copy(), u, v, w, p, theta_l.copy(), q_t, r, 0, config_low, xt, yt, zt)
         self.assertEqual(len(cf_low.clouds), 1)
 
         # With a high threshold it is excluded
         config_high = self._make_config(b_switch=True, b_condition=0.1)
-        cf_high = CloudField(l.copy(), u, v, w, p, theta_l.copy(), q_t, r, 0, config_high, xt, yt, zt)
+        cf_high = CloudField(lwc.copy(), u, v, w, p, theta_l.copy(), q_t, r, 0, config_high, xt, yt, zt)
         self.assertEqual(len(cf_high.clouds), 0)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

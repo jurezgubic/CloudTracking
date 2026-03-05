@@ -7,16 +7,14 @@ ages before the merge, rather than relying on constructor-set ages that the
 tracker overwrites.
 """
 
-import numpy as np
 from lib.cloudtracker import CloudTracker
-from tests.conftest import make_cloud, SimpleMockCloudField
+from tests.conftest import SimpleMockCloudField, make_cloud
 
 
 class TestCloudMergeAge:
     """Merged clouds inherit the age of the oldest parent."""
 
-    def test_merge_age_inheritance_default_criterion(
-            self, tracker_config, domain_grids):
+    def test_merge_age_inheritance_default_criterion(self, tracker_config, domain_grids):
         """Oldest parent wins merge with default age criterion.
 
         Timeline:
@@ -41,16 +39,12 @@ class TestCloudMergeAge:
 
         # T0
         cloud_a = make_cloud(1, 10, (100, 100, 200), 0, n)
-        tracker.update_tracks(
-            SimpleMockCloudField({1: cloud_a}, timestep=0),
-            zt, xt, yt)
+        tracker.update_tracks(SimpleMockCloudField({1: cloud_a}, timestep=0), zt, xt, yt)
 
         # T1
         cloud_a_prime = make_cloud(2, 10, (102, 102, 210), 1, n)
         cloud_b = make_cloud(3, 8, (300, 300, 250), 1, n)
-        tracker.update_tracks(
-            SimpleMockCloudField({2: cloud_a_prime, 3: cloud_b}, timestep=1),
-            zt, xt, yt)
+        tracker.update_tracks(SimpleMockCloudField({2: cloud_a_prime, 3: cloud_b}, timestep=1), zt, xt, yt)
 
         # Verify intermediate state
         assert tracker.cloud_tracks[1][-1].age == 1
@@ -58,9 +52,7 @@ class TestCloudMergeAge:
 
         # T2
         cloud_c = make_cloud(4, 20, (120, 120, 220), 2, n)
-        tracker.update_tracks(
-            SimpleMockCloudField({4: cloud_c}, timestep=2),
-            zt, xt, yt)
+        tracker.update_tracks(SimpleMockCloudField({4: cloud_c}, timestep=2), zt, xt, yt)
 
         tracks = tracker.get_tracks()
 
