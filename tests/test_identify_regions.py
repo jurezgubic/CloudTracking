@@ -223,19 +223,15 @@ class TestUpdateLabelsForMerges(_IdentifyRegionsHelper, unittest.TestCase):
 
         self.assertTrue(np.all(result[result > 0] == 1), "All nonzero should be label 1")
 
-    def test_chain_merge_partial_unification(self):
-        """Chain of merges (1-2, 2-3) — current implementation processes pairs
-        sequentially, so after (1,2) label 2 becomes 1, then (2,3) has no label 2
-        left to match. Label 3 becomes min(2,3)=2, not 1.
-        This is acceptable because find_boundary_merges only emits direct pairs,
-        not transitive chains, but documents the current behaviour."""
+    def test_chain_merge_full_unification(self):
+        """Chain of merges (1-2, 2-3) — Union-Find resolves the transitive
+        chain so all three labels are unified to the global minimum (1)."""
         labeled = np.array([[[1, 2, 3]]])
         cf = self.make_field()
         result = cf.update_labels_for_merges(labeled, [(1, 2), (2, 3)])
 
-        # After (1,2): [1, 1, 3].  After (2,3): 2→min(2,3)=2 (no 2 left), 3→2 → [1, 1, 2]
         unique_labels = set(result[result > 0].flat)
-        self.assertEqual(unique_labels, {1, 2}, "Sequential processing leaves labels {1, 2} not fully unified")
+        self.assertEqual(unique_labels, {1}, "All labels should be unified to 1")
 
     def test_empty_merges_no_change(self):
         """Empty merge list leaves labels unchanged."""
