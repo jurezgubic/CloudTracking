@@ -1,51 +1,23 @@
 """
 Tests for CloudTracker.pre_filter_cloud_matches.
 
-These tests verify centroid-based pre-filtering, which reduces the number of
+Verifies centroid-based pre-filtering, which reduces the number of
 expensive is_match() KD-tree calls by discarding cloud pairs whose centroids
 are too far apart to possibly match:
-  - Nearby clouds (within search_radius) are returned as candidates.
-  - Distant clouds (beyond search_radius) are excluded.
-  - Periodic boundary wrapping: clouds near opposite domain edges are
-    correctly identified as nearby.
-  - Inactive tracks are excluded from candidate generation.
-  - The fallback mode (switch_prefilter_fallback) returns all clouds
-    when the centroid filter finds no candidates.
-  - When pre-filtering is disabled entirely, all combinations are returned.
-
-All tests build lightweight CloudTracker + mock cloud objects to avoid
-needing real LES data.
+  - Nearby / distant cloud proximity.
+  - Periodic boundary wrapping (parametrized over x, y, corner).
+  - Inactive track exclusion.
+  - Fallback mode and disabled pre-filtering.
 """
 
-import unittest
+import pytest
 import numpy as np
 from lib.cloudtracker import CloudTracker
 from lib.cloud import Cloud
-from tests.test_utils import MockCloudField
+from tests.conftest import MockCloudField
 
 
-def _make_config(**overrides):
-    """Return a test config with pre-filtering enabled by default."""
-    config = {
-        'horizontal_resolution': 25.0,
-        'timestep_duration': 60,
-        'max_expected_cloud_speed': 20.0,  # search_radius = 20*60*2 = 2400 m
-        'bounding_box_safety_factor': 2.0,
-        'use_pre_filtering': True,
-        'switch_prefilter_fallback': True,
-        'switch_background_drift': False,
-        'switch_wind_drift': False,
-        'switch_vertical_drift': False,
-        'match_safety_factor_dynamic': 2.0,
-        'min_h_match_factor': 1.0,
-        'min_v_match_factor': 1.0,
-        'min_surface_overlap_points': 1,
-    }
-    config.update(overrides)
-    return config
-
-
-def _make_cloud(cloud_id, x, y, z, is_active=True, timestep=0):
+def _make_prefilter_cloud(cloud_id, x, y, z, is_active=True, timestep=0):
     """Create a minimal Cloud for pre-filter testing."""
     surface_points = np.array([
         [x, y, z], [x + 10, y, z], [x, y + 10, z],
@@ -80,206 +52,153 @@ def _make_cloud(cloud_id, x, y, z, is_active=True, timestep=0):
     )
 
 
-class TestPreFilterCloudMatches(unittest.TestCase):
-    """Test centroid-based pre-filtering with periodic boundaries."""
+@pytest.fixture
+def prefilter_tracker(tracker_config):
+    """CloudTracker with a 10 km x 10 km domain and pre-filtering enabled."""
+    config = {**tracker_config, 'use_pre_filtering': True}
+    tracker = CloudTracker(config)
+    tracker.xt = np.linspace(0, 10000, 401)
+    tracker.yt = np.linspace(0, 10000, 401)
+    tracker.zt = np.linspace(0, 3000, 121)
+    tracker.domain_size_x = 10000.0
+    tracker.domain_size_y = 10000.0
+    return tracker
 
-    def setUp(self):
-        """Set up a tracker with a 10 km × 10 km domain."""
-        self.config = _make_config()
-        self.tracker = CloudTracker(self.config)
 
-        # 10 km domain
-        self.tracker.xt = np.linspace(0, 10000, 401)
-        self.tracker.yt = np.linspace(0, 10000, 401)
-        self.tracker.zt = np.linspace(0, 3000, 121)
-        self.tracker.domain_size_x = 10000.0
-        self.tracker.domain_size_y = 10000.0
+# --- Basic proximity ---
 
-    # --- Basic proximity tests ---
+class TestPreFilterProximity:
+    """Basic proximity and distance checks."""
 
-    def test_nearby_cloud_is_candidate(self):
-        """A cloud within the search radius is returned as a candidate."""
-        # Previous cloud at (5000, 5000, 1000)
-        prev_cloud = _make_cloud("prev", 5000, 5000, 1000, timestep=0)
-        self.tracker.cloud_tracks["prev"] = [prev_cloud]
+    def test_nearby_cloud_is_candidate(self, prefilter_tracker):
+        prev = _make_prefilter_cloud("prev", 5000, 5000, 1000, timestep=0)
+        prefilter_tracker.cloud_tracks["prev"] = [prev]
 
-        # Current cloud at (5100, 5100, 1000) — 141 m away, radius is 2400 m
-        curr_cloud = _make_cloud("curr", 5100, 5100, 1000, timestep=1)
-        field = MockCloudField({"curr": curr_cloud}, timestep=1)
+        curr = _make_prefilter_cloud("curr", 5100, 5100, 1000, timestep=1)
+        field = MockCloudField({"curr": curr}, timestep=1)
 
-        matches = self.tracker.pre_filter_cloud_matches(field)
+        matches = prefilter_tracker.pre_filter_cloud_matches(field)
+        assert "curr" in matches["prev"]
 
-        self.assertIn("prev", matches)
-        self.assertIn("curr", matches["prev"])
+    def test_distant_cloud_excluded(self, prefilter_tracker):
+        prev = _make_prefilter_cloud("prev", 1000, 1000, 1000, timestep=0)
+        prefilter_tracker.cloud_tracks["prev"] = [prev]
 
-    def test_distant_cloud_excluded(self):
-        """A cloud far beyond the search radius is not a candidate."""
-        # search_radius = 20 m/s * 60 s * 2.0 = 2400 m
-        prev_cloud = _make_cloud("prev", 1000, 1000, 1000, timestep=0)
-        self.tracker.cloud_tracks["prev"] = [prev_cloud]
+        curr = _make_prefilter_cloud("curr", 6000, 1000, 1000, timestep=1)
+        field = MockCloudField({"curr": curr}, timestep=1)
 
-        # Current cloud 5000 m away (> 2400 m)
-        curr_cloud = _make_cloud("curr", 6000, 1000, 1000, timestep=1)
-        field = MockCloudField({"curr": curr_cloud}, timestep=1)
+        prefilter_tracker.config['switch_prefilter_fallback'] = False
+        matches = prefilter_tracker.pre_filter_cloud_matches(field)
 
-        matches = self.tracker.pre_filter_cloud_matches(field)
+        assert "prev" in matches
+        assert len(matches["prev"]) == 0
 
-        # With fallback ON, distant cloud still appears (fallback kicks in)
-        # Disable fallback to test pure proximity filtering
-        self.tracker.config['switch_prefilter_fallback'] = False
-        matches = self.tracker.pre_filter_cloud_matches(field)
+    def test_vertical_distance_exclusion(self, prefilter_tracker):
+        prev = _make_prefilter_cloud("prev", 5000, 5000, 500, timestep=0)
+        prefilter_tracker.cloud_tracks["prev"] = [prev]
 
-        self.assertIn("prev", matches)
-        self.assertEqual(len(matches["prev"]), 0,
-                         "Distant cloud should not be a candidate with fallback off")
+        curr = _make_prefilter_cloud("curr", 5000, 5000, 3500, timestep=1)
+        field = MockCloudField({"curr": curr}, timestep=1)
 
-    def test_vertical_distance_exclusion(self):
-        """Clouds within horizontal range but too far apart vertically are excluded."""
-        prev_cloud = _make_cloud("prev", 5000, 5000, 500, timestep=0)
-        self.tracker.cloud_tracks["prev"] = [prev_cloud]
+        prefilter_tracker.config['switch_prefilter_fallback'] = False
+        matches = prefilter_tracker.pre_filter_cloud_matches(field)
 
-        # Same x,y but z differs by 3000 m (> search_radius of 2400 m)
-        curr_cloud = _make_cloud("curr", 5000, 5000, 3500, timestep=1)
-        field = MockCloudField({"curr": curr_cloud}, timestep=1)
+        assert len(matches["prev"]) == 0
 
-        self.tracker.config['switch_prefilter_fallback'] = False
-        matches = self.tracker.pre_filter_cloud_matches(field)
 
-        self.assertEqual(len(matches["prev"]), 0,
-                         "Vertically distant cloud should be excluded")
+# --- Periodic boundary tests (parametrized) ---
 
-    # --- Periodic boundary tests ---
+class TestPreFilterPeriodicBoundary:
+    """Periodic boundary wrapping should detect close-by clouds."""
 
-    def test_periodic_x_boundary_match(self):
-        """Cloud near x=0 matches cloud near x=domain_size (periodic wrap)."""
-        # Previous cloud near east edge
-        prev_cloud = _make_cloud("prev", 9900, 5000, 1000, timestep=0)
-        self.tracker.cloud_tracks["prev"] = [prev_cloud]
+    @pytest.mark.parametrize(
+        "prev_x, prev_y, curr_x, curr_y",
+        [
+            (9900, 5000, 100, 5000),    # x-boundary wrap
+            (5000, 9800, 5000, 200),    # y-boundary wrap
+            (9900, 9900, 100, 100),     # corner wrap
+        ],
+        ids=["x_boundary", "y_boundary", "corner"],
+    )
+    def test_periodic_boundary_match(self, prefilter_tracker,
+                                     prev_x, prev_y, curr_x, curr_y):
+        prev = _make_prefilter_cloud("prev", prev_x, prev_y, 1000, timestep=0)
+        prefilter_tracker.cloud_tracks["prev"] = [prev]
 
-        # Current cloud near west edge — periodic distance ~ 200 m
-        curr_cloud = _make_cloud("curr", 100, 5000, 1000, timestep=1)
-        field = MockCloudField({"curr": curr_cloud}, timestep=1)
+        curr = _make_prefilter_cloud("curr", curr_x, curr_y, 1000, timestep=1)
+        field = MockCloudField({"curr": curr}, timestep=1)
 
-        self.tracker.config['switch_prefilter_fallback'] = False
-        matches = self.tracker.pre_filter_cloud_matches(field)
+        prefilter_tracker.config['switch_prefilter_fallback'] = False
+        matches = prefilter_tracker.pre_filter_cloud_matches(field)
 
-        self.assertIn("curr", matches["prev"],
-                      "Periodic x-boundary match should be detected")
+        assert "curr" in matches["prev"]
 
-    def test_periodic_y_boundary_match(self):
-        """Cloud near y=0 matches cloud near y=domain_size (periodic wrap)."""
-        prev_cloud = _make_cloud("prev", 5000, 9800, 1000, timestep=0)
-        self.tracker.cloud_tracks["prev"] = [prev_cloud]
 
-        curr_cloud = _make_cloud("curr", 5000, 200, 1000, timestep=1)
-        field = MockCloudField({"curr": curr_cloud}, timestep=1)
+# --- Inactive / fallback / disabled ---
 
-        self.tracker.config['switch_prefilter_fallback'] = False
-        matches = self.tracker.pre_filter_cloud_matches(field)
+class TestPreFilterEdgeCases:
+    """Inactive tracks, fallback, disabled pre-filtering, empty inputs."""
 
-        self.assertIn("curr", matches["prev"],
-                      "Periodic y-boundary match should be detected")
+    def test_inactive_track_excluded(self, prefilter_tracker):
+        inactive = _make_prefilter_cloud("old", 5000, 5000, 1000,
+                                         is_active=False, timestep=0)
+        prefilter_tracker.cloud_tracks["old"] = [inactive]
 
-    def test_periodic_corner_wrap(self):
-        """Cloud at domain corner (9900,9900) matches cloud at (100,100)."""
-        prev_cloud = _make_cloud("prev", 9900, 9900, 1000, timestep=0)
-        self.tracker.cloud_tracks["prev"] = [prev_cloud]
+        curr = _make_prefilter_cloud("curr", 5000, 5000, 1000, timestep=1)
+        field = MockCloudField({"curr": curr}, timestep=1)
 
-        curr_cloud = _make_cloud("curr", 100, 100, 1000, timestep=1)
-        field = MockCloudField({"curr": curr_cloud}, timestep=1)
+        matches = prefilter_tracker.pre_filter_cloud_matches(field)
+        assert "old" not in matches
 
-        self.tracker.config['switch_prefilter_fallback'] = False
-        matches = self.tracker.pre_filter_cloud_matches(field)
+    def test_fallback_returns_all_when_no_centroid_match(self, prefilter_tracker):
+        prev = _make_prefilter_cloud("prev", 1000, 1000, 1000, timestep=0)
+        prefilter_tracker.cloud_tracks["prev"] = [prev]
 
-        # Periodic distance = sqrt(200^2 + 200^2) ~ 283 m < 2400 m
-        self.assertIn("curr", matches["prev"],
-                      "Corner periodic wrap should be detected")
+        curr = _make_prefilter_cloud("curr", 8000, 8000, 1000, timestep=1)
+        field = MockCloudField({"curr": curr}, timestep=1)
 
-    # --- Inactive track handling ---
+        prefilter_tracker.config['switch_prefilter_fallback'] = True
+        matches = prefilter_tracker.pre_filter_cloud_matches(field)
 
-    def test_inactive_track_excluded(self):
-        """Inactive tracks produce no candidates."""
-        inactive_cloud = _make_cloud("old", 5000, 5000, 1000,
-                                     is_active=False, timestep=0)
-        self.tracker.cloud_tracks["old"] = [inactive_cloud]
+        assert "curr" in matches["prev"]
 
-        curr_cloud = _make_cloud("curr", 5000, 5000, 1000, timestep=1)
-        field = MockCloudField({"curr": curr_cloud}, timestep=1)
+    def test_fallback_off_returns_empty(self, prefilter_tracker):
+        prev = _make_prefilter_cloud("prev", 1000, 1000, 1000, timestep=0)
+        prefilter_tracker.cloud_tracks["prev"] = [prev]
 
-        matches = self.tracker.pre_filter_cloud_matches(field)
+        curr = _make_prefilter_cloud("curr", 8000, 8000, 1000, timestep=1)
+        field = MockCloudField({"curr": curr}, timestep=1)
 
-        self.assertNotIn("old", matches,
-                         "Inactive track should not appear in matches")
+        prefilter_tracker.config['switch_prefilter_fallback'] = False
+        matches = prefilter_tracker.pre_filter_cloud_matches(field)
 
-    # --- Fallback behaviour ---
+        assert len(matches["prev"]) == 0
 
-    def test_fallback_returns_all_when_no_centroid_match(self):
-        """With fallback ON, all clouds returned when centroid filter finds nothing."""
-        prev_cloud = _make_cloud("prev", 1000, 1000, 1000, timestep=0)
-        self.tracker.cloud_tracks["prev"] = [prev_cloud]
+    def test_disabled_returns_all_combinations(self, prefilter_tracker):
+        prefilter_tracker.config['use_pre_filtering'] = False
 
-        # Far-away cloud — centroid filter would exclude it
-        curr_cloud = _make_cloud("curr", 8000, 8000, 1000, timestep=1)
-        field = MockCloudField({"curr": curr_cloud}, timestep=1)
+        prev = _make_prefilter_cloud("prev", 1000, 1000, 1000, timestep=0)
+        prefilter_tracker.cloud_tracks["prev"] = [prev]
 
-        self.tracker.config['switch_prefilter_fallback'] = True
-        matches = self.tracker.pre_filter_cloud_matches(field)
-
-        self.assertIn("curr", matches["prev"],
-                      "Fallback should include the distant cloud")
-
-    def test_fallback_off_returns_empty(self):
-        """With fallback OFF, distant cloud yields empty candidate list."""
-        prev_cloud = _make_cloud("prev", 1000, 1000, 1000, timestep=0)
-        self.tracker.cloud_tracks["prev"] = [prev_cloud]
-
-        curr_cloud = _make_cloud("curr", 8000, 8000, 1000, timestep=1)
-        field = MockCloudField({"curr": curr_cloud}, timestep=1)
-
-        self.tracker.config['switch_prefilter_fallback'] = False
-        matches = self.tracker.pre_filter_cloud_matches(field)
-
-        self.assertEqual(len(matches["prev"]), 0,
-                         "No fallback should give empty candidates for distant cloud")
-
-    # --- Disabled pre-filtering ---
-
-    def test_disabled_returns_all_combinations(self):
-        """When use_pre_filtering=False, all current clouds are candidates for every track."""
-        self.tracker.config['use_pre_filtering'] = False
-
-        prev_cloud = _make_cloud("prev", 1000, 1000, 1000, timestep=0)
-        self.tracker.cloud_tracks["prev"] = [prev_cloud]
-
-        c1 = _make_cloud("c1", 9000, 9000, 2000, timestep=1)
-        c2 = _make_cloud("c2", 5000, 5000, 1000, timestep=1)
+        c1 = _make_prefilter_cloud("c1", 9000, 9000, 2000, timestep=1)
+        c2 = _make_prefilter_cloud("c2", 5000, 5000, 1000, timestep=1)
         field = MockCloudField({"c1": c1, "c2": c2}, timestep=1)
 
-        matches = self.tracker.pre_filter_cloud_matches(field)
+        matches = prefilter_tracker.pre_filter_cloud_matches(field)
+        assert set(matches["prev"]) == {"c1", "c2"}
 
-        self.assertEqual(set(matches["prev"]), {"c1", "c2"},
-                         "Disabled pre-filtering should return all clouds")
+    def test_no_tracks_returns_empty(self, prefilter_tracker):
+        curr = _make_prefilter_cloud("curr", 5000, 5000, 1000, timestep=1)
+        field = MockCloudField({"curr": curr}, timestep=1)
 
-    # --- Empty inputs ---
+        matches = prefilter_tracker.pre_filter_cloud_matches(field)
+        assert len(matches) == 0
 
-    def test_no_tracks_returns_empty(self):
-        """No existing tracks produces empty match dict."""
-        curr_cloud = _make_cloud("curr", 5000, 5000, 1000, timestep=1)
-        field = MockCloudField({"curr": curr_cloud}, timestep=1)
-
-        matches = self.tracker.pre_filter_cloud_matches(field)
-        self.assertEqual(len(matches), 0)
-
-    def test_no_current_clouds_returns_empty(self):
-        """No current clouds produces empty candidate lists."""
-        prev_cloud = _make_cloud("prev", 5000, 5000, 1000, timestep=0)
-        self.tracker.cloud_tracks["prev"] = [prev_cloud]
+    def test_no_current_clouds_returns_empty(self, prefilter_tracker):
+        prev = _make_prefilter_cloud("prev", 5000, 5000, 1000, timestep=0)
+        prefilter_tracker.cloud_tracks["prev"] = [prev]
 
         field = MockCloudField({}, timestep=1)
-        matches = self.tracker.pre_filter_cloud_matches(field)
+        matches = prefilter_tracker.pre_filter_cloud_matches(field)
 
-        self.assertEqual(len(matches), 0)
-
-
-if __name__ == '__main__':
-    unittest.main()
+        assert len(matches) == 0

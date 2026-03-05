@@ -1,5 +1,8 @@
 # LES Cloud Tracking and Analysis code
 
+[![CI](https://github.com/jurezgubic/CloudTracking/actions/workflows/ci.yml/badge.svg)](https://github.com/jurezgubic/CloudTracking/actions/workflows/ci.yml)
+![Python](https://img.shields.io/badge/python-3.9%2B-blue)
+
 ## Description and Aim
 This project provides Python code designed for the processing, tracking, and analysing of LES cloud data. The aim is to facilitate easy and efficient analysis of cloud dynamics and properties over time.
 
@@ -32,9 +35,13 @@ The code tracks and analyses cloud data, including cloud volume, surface area, c
 There are many more (mostly unorganised) analysis notebooks under `analysis/`. They need a tidy-up first. 
 
 ##  Running this code 
-1. Instal requirements. 
+1. Install requirements. 
 ```bash
-pip install -r requirements.txt
+pip install -e ".[all]"
+```
+Or for just the core tracking (no analysis/dev tools):
+```bash
+pip install -e .
 ```
 2. Set config file in main.py
 3. Set correct paths to LES data.
