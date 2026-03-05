@@ -156,6 +156,8 @@ class CloudTracker:
                     for child_id in child_cloud_ids:
                         if child_id not in new_matched_clouds:  # Not already handled as a merge
                             child_cloud = current_cloud_field.clouds[child_id]
+                            if child_cloud.split_from is not None:
+                                continue  # Already stamped by another parent
                             # Mark as split
                             child_cloud.splits_count += 1
                             child_cloud.split_from = parent_track_id
@@ -190,14 +192,20 @@ class CloudTracker:
                     track.append(best_cloud)
                     new_matched_clouds.add(best_cloud_id)
 
-                    # Issue 1 fix: if the previous cloud had merged_into set
-                    # (from Pass 2, where this track was a merge loser), clear it.
+                    # If this track was a merge loser in Pass 2, clear merged_into.
                     # The track survived via this child, so it did not terminate by merge.
                     if last_cloud_in_track.merged_into is not None:
+                        winner_track_id = last_cloud_in_track.merged_into
                         last_cloud_in_track.merged_into = None
+                        # Clean up the stale merge record on the winner cloud
+                        winner_cloud = self.cloud_tracks[winner_track_id][-1]
+                        if track_id in winner_cloud.merged_with:
+                            winner_cloud.merged_with.remove(track_id)
+                            if not winner_cloud.merged_with:
+                                winner_cloud.merges_count = max(0, winner_cloud.merges_count - 1)
 
-                    # Issue 6 fix: the child that continues the parent track should
-                    # not carry split_from pointing to its own track.
+                    # The child that continues the parent track should not carry
+                    # split_from pointing to its own track.
                     if best_cloud.split_from == track_id:
                         best_cloud.split_from = None
                         best_cloud.splits_count = max(0, best_cloud.splits_count - 1)

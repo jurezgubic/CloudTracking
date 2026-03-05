@@ -266,9 +266,9 @@ def process_clouds(cloud_tracker, adapter, num_timesteps):
 
     # Mark as tainted instead of deleting
     cloud_tracker.tainted_tracks.update(final_partial_tracks)
-    tainted_count += len(final_partial_tracks)
 
     print("-" * 50)
+    tainted_count = len(cloud_tracker.tainted_tracks)
     print(f"Total partial lifetime clouds marked: {tainted_count}")
     print(f"Valid complete lifecycle clouds: {len(cloud_tracker.cloud_tracks) - tainted_count}")
     print("Cloud tracking complete.")
