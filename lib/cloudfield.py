@@ -8,7 +8,6 @@ from skimage import measure
 import utils.constants as const
 from lib.cloud import Cloud
 from utils.physics import calculate_physics_variables, calculate_rh_and_temperature, compute_buoyancy_3d
-from utils.plotting_utils import plot_labeled_regions
 
 
 class CloudField:
@@ -33,6 +32,8 @@ class CloudField:
             labeled_array = self.identify_regions(l_data, w_data, config)
 
         if config["plot_switch"]:
+            from utils.plotting_utils import plot_labeled_regions
+
             plot_labeled_regions(
                 "initial_labeled_array", labeled_array, timestep=timestep, plot_all_levels=False, specific_level=50
             )
@@ -71,6 +72,8 @@ class CloudField:
 
         # plot the updated labeled clouds if plot_switch is True
         if config["plot_switch"]:
+            from utils.plotting_utils import plot_labeled_regions
+
             plot_labeled_regions(
                 "updated_labeled_array",
                 updated_labeled_array,
