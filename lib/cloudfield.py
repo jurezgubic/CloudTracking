@@ -245,13 +245,59 @@ class CloudField:
         return merges
 
     def update_labels_for_merges(self, labeled_array, merges):
-        """Update labels for merging regions."""
+        """Update labels for merging regions.
+
+        Uses Union-Find to resolve transitive merges before relabelling.
+        Without this, a chain like [(3,5), (5,7)] would be processed
+        sequentially: the first pair rewrites 5→3, so when the second
+        pair computes min(5,7)=5, label 5 no longer exists and label 7
+        ends up as 5 instead of 3. Union-Find groups all transitively
+        connected labels first, then relabels each group to its minimum
+        in a single pass.
+        """
         print("Updating labels for merges...")
-        for merge_pair in merges:
-            # merge_pair is a tuple of two labels to be merged
-            min_label = min(merge_pair)
-            for label in merge_pair:
-                labeled_array[labeled_array == label] = min_label
+        if not merges:
+            return labeled_array
+
+        # Union-Find with path compression.
+        # parent[x] stores x's parent; absent keys are their own root.
+        parent = {}
+
+        def find(x):
+            """Follow parent pointers to the root. Path compression
+            shortcuts intermediate nodes so future lookups are O(1)."""
+            while parent.get(x, x) != x:
+                parent[x] = parent.get(parent[x], parent[x])  # point to grandparent
+                x = parent[x]
+            return x
+
+        def union(a, b):
+            """Merge groups of a and b. The smaller root always becomes
+            the new root, guaranteeing each group's root is its minimum label."""
+            ra, rb = find(a), find(b)
+            if ra != rb:
+                if ra < rb:
+                    parent[rb] = ra
+                else:
+                    parent[ra] = rb
+
+        # Phase 1: Group all transitively connected labels.
+        # E.g. merges [(3,5), (5,7)] → group {3,5,7} with root 3.
+        for a, b in merges:
+            union(a, b)
+
+        # Phase 2: Resolve each label to its group minimum.
+        all_labels = set()
+        for a, b in merges:
+            all_labels.update((a, b))
+        remap = {label: find(label) for label in all_labels}
+
+        # Phase 3: Relabel the array. Each label is only written once
+        # because remap maps directly to the final root (no chaining).
+        for old_label, new_label in remap.items():
+            if old_label != new_label:
+                labeled_array[labeled_array == old_label] = new_label
+
         return labeled_array
 
     # @profile
