@@ -95,6 +95,13 @@ def initialize_netcdf(file_path, zt, ring_count, env_aloft_levels=40, config=Non
         root_grp.createVariable("area_per_level", "f4", ("track", "time", "level"), fill_value=np.nan)
         root_grp.createVariable("equiv_radius_per_level", "f4", ("track", "time", "level"), fill_value=np.nan)
         root_grp.createVariable("compactness_per_level", "f4", ("track", "time", "level"), fill_value=np.nan)
+
+        # In-cloud thermodynamic profiles
+        root_grp.createVariable("theta_l_per_level", "f4", ("track", "time", "level"), fill_value=np.nan)
+        root_grp.createVariable("q_t_per_level", "f4", ("track", "time", "level"), fill_value=np.nan)
+        root_grp.createVariable("q_l_per_level", "f4", ("track", "time", "level"), fill_value=np.nan)
+        root_grp.createVariable("theta_v_per_level", "f4", ("track", "time", "level"), fill_value=np.nan)
+
         root_grp.createVariable("base_radius_prescribed", "f4", ("track", "time"), fill_value=np.nan)
         root_grp.createVariable("base_radius_diagnosed", "f4", ("track", "time"), fill_value=np.nan)
         root_grp.createVariable("base_area_diagnosed", "f4", ("track", "time"), fill_value=np.nan)
@@ -256,6 +263,13 @@ def write_cloud_tracks_to_netcdf(
                 base_radius_diagnosed_var[i, timestep] = cloud.base_radius_diagnosed
                 base_area_diagnosed_var[i, timestep] = cloud.base_area_diagnosed
                 max_equiv_radius_var[i, timestep] = cloud.max_equiv_radius
+
+                # In-cloud thermodynamic profiles
+                if cloud.theta_l_per_level is not None:
+                    root_grp.variables["theta_l_per_level"][i, timestep, :] = cloud.theta_l_per_level
+                    root_grp.variables["q_t_per_level"][i, timestep, :] = cloud.q_t_per_level
+                    root_grp.variables["q_l_per_level"][i, timestep, :] = cloud.q_l_per_level
+                    root_grp.variables["theta_v_per_level"][i, timestep, :] = cloud.theta_v_per_level
 
                 # Write merge and split tracking data
                 merges_count_var[i, timestep] = cloud.merges_count
