@@ -11,7 +11,9 @@ __pycache__/
 CLAUDE.md
 
 # All analysis results
-analysis_output/
+/analysis_output/
+!analysis/analysis_output/
+!analysis/analysis_output/cloud_268_detachment_evolution.gif
 cloud_surface_visualizations/
 figs_notebook/
 
@@ -27,10 +29,13 @@ figs_notebook/
 
 # gifs
 *.gif
-# except this one
+
+# Keep analysis/ source files tracked, but re-ignore generated outputs inside it
 !/analysis/
-!/analysis/analysis_output/
-!/analysis/analysis_output/cloud_268_detachment_evolution.gif
+analysis/**/*.png
+analysis/**/*.gif
+!analysis/analysis_output/cloud_268_detachment_evolution.gif
+analysis/**/*.pdf
 
 # IDEs
 .vscode/
