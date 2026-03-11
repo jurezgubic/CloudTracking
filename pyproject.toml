@@ -8,6 +8,7 @@ version = "0.1.0"
 description = "Cloud tracking and analysis system for Large Eddy Simulation (LES) data"
 readme = "readme.md"
 requires-python = ">=3.9"
+license = {text = "CC0-1.0"}
 authors = [
     { name = "Jure Zgubic", email = "jure.zgubi@gmail.com" },
 ]
@@ -37,6 +38,8 @@ analysis = [
     "plotly>=5.15",
     "seaborn>=0.12",
     "pandas>=2.0",
+    "xarray>=2023.0",
+    "dask>=2023.0",
     "hmmlearn>=0.3",
     "tqdm>=4.60",
     "scikit-learn>=1.3",
