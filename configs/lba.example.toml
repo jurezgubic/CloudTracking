@@ -5,8 +5,8 @@
 # 'MONC': One file per timestep, all variables per file (e.g. LBA, RCE)
 [data]
 data_format = "MONC"
-monc_data_path = "/path/to/LBA_sample_data/jun10"
-monc_config_file = "/path/to/LBA_sample_data/jun10/lba_config.mcf"
+monc_data_path = "/path/to/LBA_data"
+monc_config_file = "/path/to/LBA_data/lba_config.mcf"
 monc_file_pattern = "3dfields_ts_{time}.nc"
 
 [cloud_identification]

@@ -5,7 +5,7 @@
 # 'MONC': One file per timestep, all variables per file (e.g. LBA, RCE)
 [data]
 data_format = "UCLA-LES"
-base_file_path = "/path/to/RICO_1hr/"
+base_file_path = "/path/to/RICO_data/"
 
 # Variable name -> filename mapping
 [data.file_name]
