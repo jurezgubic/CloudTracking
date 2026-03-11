@@ -7,7 +7,9 @@ from netCDF4 import Dataset
 parser = argparse.ArgumentParser(description="Check variable units in NetCDF data files.")
 parser.add_argument("base_path", help="Directory containing the NetCDF files")
 parser.add_argument(
-    "--files", nargs="+", default=["l:rico.l.nc", "q:rico.q.nc", "t:rico.t.nc", "p:rico.p.nc"],
+    "--files",
+    nargs="+",
+    default=["l:rico.l.nc", "q:rico.q.nc", "t:rico.t.nc", "p:rico.p.nc"],
     help="Variable:filename pairs to check (default: RICO l/q/t/p)",
 )
 args = parser.parse_args()

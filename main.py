@@ -273,11 +273,13 @@ def main(config, delete_existing_file):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Cloud tracking script.")
     parser.add_argument(
-        "--config", default="configs/rico.toml",
+        "--config",
+        default="configs/rico.toml",
         help="Path to TOML config file (default: configs/rico.toml)",
     )
     parser.add_argument(
-        "--delete", action="store_true",
+        "--delete",
+        action="store_true",
         help="Delete the existing output netcdf file before running the script.",
     )
     args = parser.parse_args()

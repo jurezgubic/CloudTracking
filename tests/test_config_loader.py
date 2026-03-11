@@ -82,7 +82,7 @@ class TestLoadConfig:
 
     def test_missing_data_format_raises(self, tmp_path):
         toml_file = tmp_path / "bad.toml"
-        toml_file.write_text('[cloud_identification]\nmin_size = 10\n')
+        toml_file.write_text("[cloud_identification]\nmin_size = 10\n")
         with pytest.raises(ValueError, match="Missing required config keys"):
             load_config(str(toml_file))
 

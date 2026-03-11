@@ -78,14 +78,10 @@ def validate_config(config: dict[str, Any]) -> None:
         _check_path_exists(config["monc_config_file"], "monc_config_file")
 
     else:
-        raise ValueError(
-            f"Unknown data_format '{data_format}'. Expected 'UCLA-LES' or 'MONC'."
-        )
+        raise ValueError(f"Unknown data_format '{data_format}'. Expected 'UCLA-LES' or 'MONC'.")
 
 
 def _check_path_exists(path: str, key_name: str) -> None:
     """Raise FileNotFoundError if path does not exist."""
     if not Path(path).exists():
-        raise FileNotFoundError(
-            f"Path for '{key_name}' does not exist: {path}"
-        )
+        raise FileNotFoundError(f"Path for '{key_name}' does not exist: {path}")
