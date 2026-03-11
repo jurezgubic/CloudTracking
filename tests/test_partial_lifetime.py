@@ -65,7 +65,7 @@ class TestMainPartialLifetime(unittest.TestCase):
         # total_timesteps = 20 => track #0 partial-lifetime (started at t=0),
         # track #1 partial-lifetime (still active at t=19),
         # track #2 is valid (started after t=0 and ended before t=19).
-        finalize_partial_lifetime_tracks(cloud_tracker, total_timesteps=20)
+        finalize_partial_lifetime_tracks(cloud_tracker, total_timesteps=20, output_netcdf_path="dummy.nc")
 
         # Check the calls to set valid_track = 0
         self.assertIn(0, cloud_tracker.cloud_tracks)
