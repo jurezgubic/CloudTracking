@@ -8,111 +8,12 @@ from netCDF4 import Dataset
 
 import src.data_management as data_management
 from lib.cloudtracker import CloudTracker
+from src.config_loader import load_config
 from src.data_management import (
     create_data_adapter,
     load_cloud_field_from_adapter,
 )
 from src.netcdf_writer import write_cloud_tracks_to_netcdf
-
-# Warning!
-# User needs to modify: config (especially data paths), output_netcdf_path, total_timesteps
-
-# =============================================================================
-# Processing Options
-# =============================================================================
-output_netcdf_path = "cloud_results.nc"
-total_timesteps = -1  # Number of timesteps to process (set to -1 to process all available)
-
-# =============================================================================
-# Cloud Definition and Tracking Configuration
-# =============================================================================
-config = {
-    # =========================================================================
-    # DATA FORMAT SELECTION
-    # =========================================================================
-    # 'data_format': 'UCLA-LES' or 'MONC'
-    #   - UCLA-LES: One file per variable, all timesteps in each (e.g., RICO, DALES)
-    #   - MONC: One file per timestep, all variables in each (e.g., LBA, RCE)
-    "data_format": "UCLA-LES",
-    # =========================================================================
-    # UCLA-LES specific paths (used when data_format='UCLA-LES')
-    # =========================================================================
-    # base_file_path: Directory containing variable files
-    # file_name: Dict mapping variable names to filenames
-    "base_file_path": "/Users/jure/PhD/coding/RICO_1hr/",
-    "file_name": {
-        "l": "rico.l.nc",  # Liquid water mixing ratio
-        "u": "rico.u.nc",  # u wind
-        "v": "rico.v.nc",  # v wind
-        "w": "rico.w.nc",  # w wind (vertical velocity)
-        "p": "rico.p.nc",  # Pressure
-        "t": "rico.t.nc",  # Liquid Water Potential temperature
-        "q": "rico.q.nc",  # Total water mixing ratio
-        "r": "rico.r.nc",  # Rain water mixing ratio (optional)
-    },
-    # =========================================================================
-    # MONC specific paths (used when data_format='MONC')
-    # =========================================================================
-    # Each timestep is in a separate file: 3dfields_ts_{time}.nc
-    "monc_data_path": "/Users/jure/PhD/coding/LBA_sample_data/jun10",
-    "monc_config_file": "/Users/jure/PhD/coding/LBA_sample_data/jun10/lba_config.mcf",
-    "monc_file_pattern": "3dfields_ts_{time}.nc",
-    # Cloud identification
-    "min_size": 10,  # Minimum number of points for a cloud to be considered a cloud
-    "l_condition": 5e-4,  # kg/kg. Minimum liquid water content for a point to be a cloud.
-    "w_condition": 0.0,  # m/s. Minimum vertical velocity for a point to be part of a cloud.
-    "w_switch": False,  # If True, apply the 'w_condition' threshold.
-    "b_condition": 0.0,  # m/s^2. Minimum buoyancy for a cloud point (0 = positively buoyant).
-    "b_switch": False,  # If True, apply the 'b_condition' threshold.
-    # Simulation parameters
-    "timestep_duration": 60,  # Seconds. Time between timesteps. (LBA: 180s, RICO: 60s)
-    "horizontal_resolution": 25.0,  # m. Grid resolution (LBA: 200m, RICO: 25m). Auto-updated from adapter.
-    # Physics-based Adjustments
-    "switch_wind_drift": True,  # If True, consider the mean horizontal motion in tracking.
-    "switch_vertical_drift": True,  # If True, consider the mean vertical motion in tracking.
-    "cloud_base_altitude": 700,  # m. Estimated cloud base altitude for certain calculations
-    # Matching parameters
-    "distance_threshold": 0,  # Max distance between merging clouds across a periodic boundary.
-    "min_h_match_factor": 2.5,  # Minimum horizontal match factor. Min distance =  'min_h_match_factor' * 'horizontal_resolution'
-    "min_v_match_factor": 2.5,  # Minimum vertical match factor. Min distance =  'min_v_match_factor' * 'horizontal_resolution'
-    "match_safety_factor_dynamic": 2.0,  # Dynamic safety factor for matching clouds based on velocities.
-    "bounding_box_safety_factor": 1.2,  # Safety factor for pre-filtering potential matches (using centroids).
-    "max_expected_cloud_speed": 15.0,  # m/s. An estimate to constrain the search space for matching.
-    "use_pre_filtering": True,  # If True, use a pre-filtering step to find potential matches (speed up matching).
-    "switch_prefilter_fallback": False,  # If True: when no pre-filter candidates are found fallback to full-domain search.
-    "min_surface_overlap_points": 1,  # Require at least this many overlapping surface points for a match
-    "match_shell_layers": 3,  # Number of cloud shell layers to include for matching (1 = surface points only)
-    # Merge/split resolution
-    "merge_winner_criterion": "age",  # 'age' (default): oldest parent wins merge.
-    # 'size': largest parent (cell count) wins merge.
-    # Also controls parent selection for orphaned merge children.
-    # Visualisation (somewhat deprecated)
-    "plot_switch": False,  # If True, plot the cloud field at each timestep.
-    # Parameters for cloud base diagnosisq
-    "base_scan_levels": 3,  # Number of levels to scan upward for diagnosed base from lowest cloud level
-    "base_increase_threshold": 1.5,  # Factor required to increase base radius from lowest cloud level (1.5 = 50%)
-    # NIP (Neighbour Interaction Potential) parameters
-    "nip_gamma": 0.3,  # Kinematic boost coefficient
-    "nip_f": 3.0,  # Radius multiplier for neighbour search per level
-    "nip_Lh_min": 100.0,  # Min horizontal scale Lh [m]
-    "nip_Lh_max": 2000.0,  # Max horizontal scale Lh [m]
-    "nip_T_min": 60.0,  # Min temporal memory scale [s]
-    "nip_T_max": 6000.0,  # Max temporal memory scale [s]
-    # Environment ring (per-cloud surroundings) parameters
-    "env_ring_max_distance": 4,  # Max Manhattan ring distance D around cloud edge (2D)
-    "env_periodic_rings": True,  # Respect periodic boundaries when forming rings
-    # Environment aloft parameters
-    "env_aloft_levels": 20,  # Number of levels above cloud top to analyze. Set to -1 for all levels!
-    "env_aloft_mode": "flat",  # 'flat' (plane above max top) or 'local' (following terrain above cloud)
-    "env_aloft_sampling_mode": "fixed_mean_area",  # 'exact' (cloud shape) or 'fixed_mean_area' (circle with mean cloud area)
-    # Note for 'fixed_mean_area': Assumes steady-state simulation (cloud sizes don't change massively).
-    # Performance tuning
-    "cloud_batch_size": 50,  # Number of clouds to process before forcing garbage collection
-}
-
-# =============================================================================
-# End of user modifiable parameters
-# =============================================================================
 
 
 # Function to calculate mean_w
@@ -144,7 +45,7 @@ def resolve_cloud_base_altitude(config, z_levels):
 
 
 # @profile
-def process_clouds(cloud_tracker, adapter, num_timesteps):
+def process_clouds(cloud_tracker, adapter, num_timesteps, config, output_netcdf_path):
     """Process clouds and mark partial lifecycle clouds as tainted.
 
     Parameters
@@ -289,7 +190,7 @@ def process_clouds(cloud_tracker, adapter, num_timesteps):
     )
 
 
-def finalize_partial_lifetime_tracks(cloud_tracker, total_timesteps):
+def finalize_partial_lifetime_tracks(cloud_tracker, total_timesteps, output_netcdf_path):
     """
     LEGACY FUNCTION: Not currently used. Kept for reference only.
     This functionality is now handled directly in the process_clouds function.
@@ -326,10 +227,13 @@ def finalize_partial_lifetime_tracks(cloud_tracker, total_timesteps):
             # Note: merged_into is already handled in the write_cloud_tracks_to_netcdf function
 
 
-def main(delete_existing_file):
+def main(config, delete_existing_file):
     """Main function to set up and run the cloud tracking process."""
     # Start total time timer
     total_start_time = time.time()
+
+    output_netcdf_path = config.get("output_path", "cloud_results.nc")
+    total_timesteps = config.get("total_timesteps", -1)
 
     # Delete the existing output file if the option is provided
     if delete_existing_file and os.path.exists(output_netcdf_path):
@@ -358,7 +262,7 @@ def main(delete_existing_file):
     cloud_tracker = CloudTracker(config)
 
     # Process clouds - partial lifetime clouds will be marked as tainted (not removed)
-    process_clouds(cloud_tracker, adapter, num_timesteps)
+    process_clouds(cloud_tracker, adapter, num_timesteps, config, output_netcdf_path)
 
     # Calculate and display total time
     total_end_time = time.time()
@@ -367,22 +271,17 @@ def main(delete_existing_file):
 
 
 if __name__ == "__main__":
-    # Parse command line arguments
     parser = argparse.ArgumentParser(description="Cloud tracking script.")
     parser.add_argument(
-        "--delete", action="store_true", help="Delete the existing output netcdf file before running the script."
+        "--config", default="configs/rico.toml",
+        help="Path to TOML config file (default: configs/rico.toml)",
+    )
+    parser.add_argument(
+        "--delete", action="store_true",
+        help="Delete the existing output netcdf file before running the script.",
     )
     args = parser.parse_args()
 
-    main(args.delete)
-
-
-## set proper output file path (placeholder for later)
-# import os
-# import datetime
-# today = datetime.date.today()
-# output_folder = f'output/{today}'
-# if not os.path.exists(output_folder):
-#     os.makedirs(output_folder)
-# output_netcdf_path = f'{output_folder}/{total_timesteps}timesteps_{config["l_condition"]}l_condition.nc'
-# print(f"Output netcdf file path: {output_netcdf_path}")
+    print(f"Loading config: {args.config}")
+    config = load_config(args.config)
+    main(config, args.delete)

@@ -6,6 +6,10 @@ __pycache__/
 # netcdf files
 *.nc
 
+# User config files (contain local absolute paths)
+configs/*.toml
+!configs/*.example.toml
+
 # AI assistant instructions (local only)
 .github/copilot-instructions.md
 CLAUDE.md

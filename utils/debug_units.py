@@ -1,10 +1,22 @@
+import argparse
 import os
 
 import numpy as np
 from netCDF4 import Dataset
 
-base_file_path = "/Users/jure/PhD/coding/RICO_1hr/"
-files_to_check = {"l": "rico.l.nc", "q": "rico.q.nc", "t": "rico.t.nc", "p": "rico.p.nc"}
+parser = argparse.ArgumentParser(description="Check variable units in NetCDF data files.")
+parser.add_argument("base_path", help="Directory containing the NetCDF files")
+parser.add_argument(
+    "--files", nargs="+", default=["l:rico.l.nc", "q:rico.q.nc", "t:rico.t.nc", "p:rico.p.nc"],
+    help="Variable:filename pairs to check (default: RICO l/q/t/p)",
+)
+args = parser.parse_args()
+
+base_file_path = args.base_path
+files_to_check = {}
+for entry in args.files:
+    var_key, file_name = entry.split(":", 1)
+    files_to_check[var_key] = file_name
 
 for var_key, file_name in files_to_check.items():
     file_path = os.path.join(base_file_path, file_name)

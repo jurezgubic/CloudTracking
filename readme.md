@@ -6,7 +6,7 @@
 ## Description and Aim
 This project provides Python code designed for the processing, tracking, and analysing of LES cloud data. The aim is to facilitate easy and efficient analysis of cloud dynamics and properties over time.
 
-Currently configured for the [RICO case](https://doi.org/10.1175/BAMS-88-12-1912). Setups for LBA and RCE setups will be added soon. 
+Supports multiple LES setups via TOML config files (e.g. [RICO](https://doi.org/10.1175/BAMS-88-12-1912), LBA). See `configs/` for examples.
 
 ## About the code
 The code tracks and analyses cloud data, including cloud volume, surface area, cloud base size, near environment of each cloud and many others (see [src/netcdf_writer.py](src/netcdf_writer.py) for all). It accounts for wind drift between time steps and works for biperiodic domains. It allows for user choice of cloud identification thresholds. Some features and internal workings:
@@ -23,7 +23,7 @@ The code tracks and analyses cloud data, including cloud volume, surface area, c
 
 ## Summary of modules
 0. **analysis/input_field_statistics.ipynb**: Inspects basic characteristics of input data.
-1. **main.py**: Workflow oversight, paramater configration and managing other modules.
+1. **main.py**: Workflow oversight and managing other modules. Configuration via `configs/*.toml`.
 2. **src/data_management.py**: Data loading and preprocessing of NetCDF data.
 3. **lib/cloud.py**: Cloud object used across modules.
 4. **lib/cloudfield.py**: Identifies cloud objects in the loaded dataset.
@@ -34,8 +34,8 @@ The code tracks and analyses cloud data, including cloud volume, surface area, c
 
 There are many more (mostly unorganised) analysis notebooks under `analysis/`. They need a tidy-up first. 
 
-##  Running this code 
-1. Install requirements. 
+##  Running this code
+1. Install requirements.
 ```bash
 pip install -e ".[all]"
 ```
@@ -43,10 +43,20 @@ Or for just the core tracking (no analysis/dev tools):
 ```bash
 pip install -e .
 ```
-2. Set config file in main.py
-3. Set correct paths to LES data.
-4. Run with `python main.py`
-5. To inspect output run analysis/output_analysis.ipynb notebook.
+2. Create a config file from an example template and set your local data path:
+```bash
+cp configs/rico.example.toml configs/rico.toml
+# Edit configs/rico.toml — set base_file_path to your data directory
+```
+The `.example.toml` files are tracked in git (with parameter descriptions). Your `.toml` files are gitignored since they contain machine-specific paths.
+
+3. Run the tracker:
+```bash
+python main.py                             # uses configs/rico.toml by default
+python main.py --config configs/lba.toml   # switch dataset
+python main.py --delete                    # delete existing output first
+```
+4. To inspect output run analysis/output_analysis.ipynb notebook.
 
 
 ### With memory profiler
