@@ -1,9 +1,6 @@
-import os
-import tempfile
-
 import pytest
 
-from src.config_loader import _flatten, load_config, validate_config
+from src.config_loader import _flatten, load_config
 
 
 @pytest.fixture
