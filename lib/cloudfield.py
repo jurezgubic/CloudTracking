@@ -531,6 +531,10 @@ class CloudField:
                     area_per_level = np.full(n_levels, np.nan)
                     equiv_radius_per_level = np.full(n_levels, np.nan)
                     compactness_per_level = np.full(n_levels, np.nan)
+                    theta_l_per_level = np.full(n_levels, np.nan)
+                    q_t_per_level = np.full(n_levels, np.nan)
+                    q_l_per_level = np.full(n_levels, np.nan)
+                    theta_v_per_level = np.full(n_levels, np.nan)
 
                     # Get unique z levels and their counts
                     unique_z_levels, z_level_counts = np.unique(point_indices[:, 0], return_counts=True)
@@ -546,6 +550,10 @@ class CloudField:
                         level_mass_fluxes = mass_fluxes[level_mask]
                         level_u_values = u_values[level_mask]
                         level_v_values = v_values[level_mask]
+                        level_theta_l = theta_l_values[level_mask]
+                        level_q_t = q_t_values[level_mask]
+                        level_q_l = q_l_values[level_mask]
+                        level_p = p_values[level_mask]
 
                         # Calculate level statistics
                         w_per_level[z_level_idx] = np.mean(level_w_values)
@@ -553,6 +561,17 @@ class CloudField:
                         v_per_level[z_level_idx] = np.mean(level_v_values)
                         temp_per_level[z_level_idx] = np.mean(level_temps)
                         mass_flux_per_level[z_level_idx] = np.sum(level_mass_fluxes)
+
+                        # In-cloud thermodynamic profiles
+                        theta_l_per_level[z_level_idx] = np.mean(level_theta_l)
+                        q_t_per_level[z_level_idx] = np.mean(level_q_t)
+                        q_l_per_level[z_level_idx] = np.mean(level_q_l)
+                        # theta_v from full saturated formula
+                        exner = (level_p / const.p_0) ** (const.R_d / const.c_pd)
+                        theta = level_theta_l + (const.L_v / (const.c_pd * exner)) * level_q_l
+                        q_v = level_q_t - level_q_l
+                        tv = theta * (1.0 + q_v / const.epsilon) / (1.0 + level_q_t)
+                        theta_v_per_level[z_level_idx] = np.mean(tv)
 
                         # Calculate circumference and effective radius
                         cloud_slice = updated_labeled_array[z_level_idx, :, :] == region.label
@@ -797,6 +816,11 @@ class CloudField:
                         base_radius_diagnosed=base_radius_diagnosed,
                         base_area_diagnosed=base_area_diagnosed,
                         max_equiv_radius=max_equiv_radius,
+                        # In-cloud thermodynamic profiles
+                        theta_l_per_level=theta_l_per_level,
+                        q_t_per_level=q_t_per_level,
+                        q_l_per_level=q_l_per_level,
+                        theta_v_per_level=theta_v_per_level,
                         # NIP kinematics per level
                         u_per_level=u_per_level,
                         v_per_level=v_per_level,

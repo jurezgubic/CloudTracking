@@ -40,6 +40,11 @@ class Cloud:
         base_radius_diagnosed=None,
         base_area_diagnosed=None,
         max_equiv_radius=None,
+        # In-cloud thermodynamic profiles
+        theta_l_per_level=None,
+        q_t_per_level=None,
+        q_l_per_level=None,
+        theta_v_per_level=None,
         # Environment Aloft
         env_aloft_qt_diff=None,
         env_aloft_thetal_diff=None,
@@ -98,6 +103,12 @@ class Cloud:
         self.base_radius_diagnosed = base_radius_diagnosed
         self.base_area_diagnosed = base_area_diagnosed
         self.max_equiv_radius = max_equiv_radius
+
+        # In-cloud thermodynamic profiles
+        self.theta_l_per_level = theta_l_per_level
+        self.q_t_per_level = q_t_per_level
+        self.q_l_per_level = q_l_per_level
+        self.theta_v_per_level = theta_v_per_level
 
         # Environment Aloft
         self.env_aloft_qt_diff = env_aloft_qt_diff
