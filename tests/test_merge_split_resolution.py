@@ -67,8 +67,8 @@ class TestStaleMergedIntoClearedOnSplitContinuation:
         cloud_b_in_track = tracks[2][0]
         assert cloud_b_in_track.merged_into is None, "merged_into must be cleared when track survives via split child"
 
-        # M should still record that track 2 merged into it
-        assert 2 in tracks[1][-1].merged_with
+        # Track 2 survived, so the stale merge record on M must also be cleaned up
+        assert 2 not in tracks[1][-1].merged_with, "merged_with must drop track that survived"
 
 
 class TestMergeWinnerCriterion:

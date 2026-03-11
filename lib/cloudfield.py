@@ -245,13 +245,59 @@ class CloudField:
         return merges
 
     def update_labels_for_merges(self, labeled_array, merges):
-        """Update labels for merging regions."""
+        """Update labels for merging regions.
+
+        Uses Union-Find to resolve transitive merges before relabelling.
+        Without this, a chain like [(3,5), (5,7)] would be processed
+        sequentially: the first pair rewrites 5→3, so when the second
+        pair computes min(5,7)=5, label 5 no longer exists and label 7
+        ends up as 5 instead of 3. Union-Find groups all transitively
+        connected labels first, then relabels each group to its minimum
+        in a single pass.
+        """
         print("Updating labels for merges...")
-        for merge_pair in merges:
-            # merge_pair is a tuple of two labels to be merged
-            min_label = min(merge_pair)
-            for label in merge_pair:
-                labeled_array[labeled_array == label] = min_label
+        if not merges:
+            return labeled_array
+
+        # Union-Find with path compression.
+        # parent[x] stores x's parent; absent keys are their own root.
+        parent = {}
+
+        def find(x):
+            """Follow parent pointers to the root. Path compression
+            shortcuts intermediate nodes so future lookups are O(1)."""
+            while parent.get(x, x) != x:
+                parent[x] = parent.get(parent[x], parent[x])  # point to grandparent
+                x = parent[x]
+            return x
+
+        def union(a, b):
+            """Merge groups of a and b. The smaller root always becomes
+            the new root, guaranteeing each group's root is its minimum label."""
+            ra, rb = find(a), find(b)
+            if ra != rb:
+                if ra < rb:
+                    parent[rb] = ra
+                else:
+                    parent[ra] = rb
+
+        # Phase 1: Group all transitively connected labels.
+        # E.g. merges [(3,5), (5,7)] → group {3,5,7} with root 3.
+        for a, b in merges:
+            union(a, b)
+
+        # Phase 2: Resolve each label to its group minimum.
+        all_labels = set()
+        for a, b in merges:
+            all_labels.update((a, b))
+        remap = {label: find(label) for label in all_labels}
+
+        # Phase 3: Relabel the array. Each label is only written once
+        # because remap maps directly to the final root (no chaining).
+        for old_label, new_label in remap.items():
+            if old_label != new_label:
+                labeled_array[labeled_array == old_label] = new_label
+
         return labeled_array
 
     # @profile
@@ -485,6 +531,10 @@ class CloudField:
                     area_per_level = np.full(n_levels, np.nan)
                     equiv_radius_per_level = np.full(n_levels, np.nan)
                     compactness_per_level = np.full(n_levels, np.nan)
+                    theta_l_per_level = np.full(n_levels, np.nan)
+                    q_t_per_level = np.full(n_levels, np.nan)
+                    q_l_per_level = np.full(n_levels, np.nan)
+                    theta_v_per_level = np.full(n_levels, np.nan)
 
                     # Get unique z levels and their counts
                     unique_z_levels, z_level_counts = np.unique(point_indices[:, 0], return_counts=True)
@@ -500,6 +550,10 @@ class CloudField:
                         level_mass_fluxes = mass_fluxes[level_mask]
                         level_u_values = u_values[level_mask]
                         level_v_values = v_values[level_mask]
+                        level_theta_l = theta_l_values[level_mask]
+                        level_q_t = q_t_values[level_mask]
+                        level_q_l = q_l_values[level_mask]
+                        level_p = p_values[level_mask]
 
                         # Calculate level statistics
                         w_per_level[z_level_idx] = np.mean(level_w_values)
@@ -507,6 +561,17 @@ class CloudField:
                         v_per_level[z_level_idx] = np.mean(level_v_values)
                         temp_per_level[z_level_idx] = np.mean(level_temps)
                         mass_flux_per_level[z_level_idx] = np.sum(level_mass_fluxes)
+
+                        # In-cloud thermodynamic profiles
+                        theta_l_per_level[z_level_idx] = np.mean(level_theta_l)
+                        q_t_per_level[z_level_idx] = np.mean(level_q_t)
+                        q_l_per_level[z_level_idx] = np.mean(level_q_l)
+                        # theta_v from full saturated formula
+                        exner = (level_p / const.p_0) ** (const.R_d / const.c_pd)
+                        theta = level_theta_l + (const.L_v / (const.c_pd * exner)) * level_q_l
+                        q_v = level_q_t - level_q_l
+                        tv = theta * (1.0 + q_v / const.epsilon) / (1.0 + level_q_t)
+                        theta_v_per_level[z_level_idx] = np.mean(tv)
 
                         # Calculate circumference and effective radius
                         cloud_slice = updated_labeled_array[z_level_idx, :, :] == region.label
@@ -751,6 +816,11 @@ class CloudField:
                         base_radius_diagnosed=base_radius_diagnosed,
                         base_area_diagnosed=base_area_diagnosed,
                         max_equiv_radius=max_equiv_radius,
+                        # In-cloud thermodynamic profiles
+                        theta_l_per_level=theta_l_per_level,
+                        q_t_per_level=q_t_per_level,
+                        q_l_per_level=q_l_per_level,
+                        theta_v_per_level=theta_v_per_level,
                         # NIP kinematics per level
                         u_per_level=u_per_level,
                         v_per_level=v_per_level,

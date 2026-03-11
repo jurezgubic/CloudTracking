@@ -275,10 +275,8 @@ def calculate_physics_variables(
         if r_rain_values is not None:
             r_r = r_rain_values[i]
 
-        # Condensable water excludes rain (rain doesn't participate in saturation)
-        r_condensable = q_t - r_r
-        if r_condensable < 0.0:
-            r_condensable = 0.0
+        # q_t already excludes rain (q_t = q_l + q_v), so use it directly
+        r_condensable = q_t
 
         # Saturation adjustment to get T, r_l, r_v
         T, r_l, r_v = _saturation_adjustment_newton(theta_l, p, r_condensable)
